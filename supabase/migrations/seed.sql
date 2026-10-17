@@ -1,0 +1,180 @@
+-- Seed hanya membuat klasifikasi dan arsip contoh. Buat user di Authentication, lalu ganti email pada UPDATE berikut untuk admin pertama:
+-- update public.profiles
+-- set role = 'admin'
+-- where id = (select id from auth.users where email = 'GANTI_DENGAN_EMAIL_ADMIN');
+insert into public.klasifikasi (id, kode, nama)
+values
+  ('21000000-0000-4000-8000-000000000001', 'KLAS-HUM-01', 'Publikasi kegiatan'),
+  ('21000000-0000-4000-8000-000000000002', 'KLAS-HUM-02', 'Siaran pers'),
+  ('21000000-0000-4000-8000-000000000003', 'KLAS-HUM-03', 'Dokumentasi foto dan video'),
+  ('21000000-0000-4000-8000-000000000004', 'KLAS-HUM-04', 'Informasi layanan publik'),
+  ('21000000-0000-4000-8000-000000000005', 'KLAS-HUM-05', 'Materi komunikasi internal')
+on conflict (kode) do nothing;
+
+insert into public.arsip (
+  id,
+  nomor_arsip,
+  judul,
+  kategori,
+  klasifikasi_id,
+  unit_pencipta,
+  status,
+  masa_retensi_tahun,
+  tanggal_retensi,
+  tingkat_akses,
+  file_path,
+  ukuran_file,
+  diunggah_oleh
+)
+values
+  (
+    '31000000-0000-4000-8000-000000000001',
+    'CONTOH-ARSIP-2026-0001',
+    '[CONTOH] Dokumentasi kegiatan pelayanan masyarakat',
+    'Publikasi kegiatan',
+    '21000000-0000-4000-8000-000000000001',
+    '[CONTOH] Bagian Humas',
+    'terverifikasi',
+    5,
+    current_date + 45,
+    'publik',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000002',
+    'CONTOH-ARSIP-2026-0002',
+    '[CONTOH] Siaran pers simulasi',
+    'Siaran pers',
+    '21000000-0000-4000-8000-000000000002',
+    '[CONTOH] Bagian Humas',
+    'menunggu_verifikasi',
+    3,
+    current_date + 80,
+    'internal',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000003',
+    'CONTOH-ARSIP-2026-0003',
+    '[CONTOH] Dokumentasi foto simulasi',
+    'Dokumentasi',
+    '21000000-0000-4000-8000-000000000003',
+    '[CONTOH] Bagian Humas',
+    'terverifikasi',
+    4,
+    current_date + 120,
+    'internal',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000004',
+    'CONTOH-ARSIP-2026-0004',
+    '[CONTOH] Informasi layanan administrasi',
+    'Informasi layanan',
+    '21000000-0000-4000-8000-000000000004',
+    '[CONTOH] Unit Pelayanan',
+    'terverifikasi',
+    2,
+    current_date + 250,
+    'publik',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000005',
+    'CONTOH-ARSIP-2026-0005',
+    '[CONTOH] Materi koordinasi internal',
+    'Materi internal',
+    '21000000-0000-4000-8000-000000000005',
+    '[CONTOH] Bagian Humas',
+    'menunggu_verifikasi',
+    2,
+    current_date + 30,
+    'terbatas',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000006',
+    'CONTOH-ARSIP-2026-0006',
+    '[CONTOH] Draf pengumuman simulasi',
+    'Siaran pers',
+    '21000000-0000-4000-8000-000000000002',
+    '[CONTOH] Bagian Humas',
+    'menunggu_verifikasi',
+    3,
+    current_date + 170,
+    'rahasia',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000007',
+    'CONTOH-ARSIP-2026-0007',
+    '[CONTOH] Dokumentasi layanan publik',
+    'Publikasi kegiatan',
+    '21000000-0000-4000-8000-000000000001',
+    '[CONTOH] Unit Pelayanan',
+    'inaktif',
+    6,
+    current_date + 60,
+    'publik',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000008',
+    'CONTOH-ARSIP-2026-0008',
+    '[CONTOH] Paket foto publikasi simulasi',
+    'Dokumentasi',
+    '21000000-0000-4000-8000-000000000003',
+    '[CONTOH] Bagian Humas',
+    'terverifikasi',
+    4,
+    current_date + 15,
+    'terbatas',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000009',
+    'CONTOH-ARSIP-2026-0009',
+    '[CONTOH] Panduan komunikasi layanan',
+    'Informasi layanan',
+    '21000000-0000-4000-8000-000000000004',
+    '[CONTOH] Unit Pelayanan',
+    'terverifikasi',
+    5,
+    current_date + 365,
+    'internal',
+    null,
+    null,
+    null
+  ),
+  (
+    '31000000-0000-4000-8000-000000000010',
+    'CONTOH-ARSIP-2026-0010',
+    '[CONTOH] Catatan koordinasi terbatas',
+    'Materi internal',
+    '21000000-0000-4000-8000-000000000005',
+    '[CONTOH] Bagian Humas',
+    'inaktif',
+    3,
+    current_date + 90,
+    'rahasia',
+    null,
+    null,
+    null
+  )
+on conflict (nomor_arsip) do nothing;

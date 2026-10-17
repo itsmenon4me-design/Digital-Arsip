@@ -1,0 +1,91 @@
+/* Font sans sistem menjaga teks administratif tetap terbaca di perangkat yang tersedia. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transition: none !important;
+}
+
+html {
+  min-width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+}
+
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+dialog[open] {
+  overscroll-behavior: contain;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--gold-glow);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd {
+  margin-top: 0;
+}
+
+::selection {
+  color: var(--text-on-gold);
+  background: var(--gold-light);
+}
+
+[hidden] {
+  display: none !important;
+}

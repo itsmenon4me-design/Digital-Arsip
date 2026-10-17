@@ -1,0 +1,19 @@
+-- Usulan saja. Jangan jalankan sebelum pemilik proses menetapkan apakah aturan
+-- retensi berlaku per klasifikasi, kategori, atau kombinasi keduanya.
+-- Skema lokal saat ini hanya menyimpan masa_retensi_tahun dan tanggal_retensi
+-- per arsip; tidak ada tabel aturan jadwal retensi.
+--
+-- Kandidat minimal jika aturan ditetapkan per klasifikasi:
+-- create table public.jadwal_retensi (
+--   id uuid primary key default gen_random_uuid(),
+--   klasifikasi_id uuid not null references public.klasifikasi (id) on delete restrict,
+--   masa_retensi_tahun integer not null check (masa_retensi_tahun >= 0),
+--   keterangan text,
+--   created_at timestamptz not null default now(),
+--   unique (klasifikasi_id)
+-- );
+--
+-- Sebelum diterapkan, tetapkan juga aturan pemutakhiran tanggal_retensi arsip
+-- ketika suatu jadwal berubah serta policy RLS/grant khusus bagi pembaca.
+--
+-- Rollback: tidak ada perubahan database dari berkas usulan ini.

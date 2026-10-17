@@ -1,0 +1,21 @@
+{
+  "name": "sistem-pengarsipan-digital",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/ind": "^1.0.0",
+    "pdfjs-dist": "^6.4.299",
+    "tesseract.js": "^7.0.0"
+  }
+}
