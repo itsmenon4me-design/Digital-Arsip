@@ -313,6 +313,7 @@ export function createClassificationPage({ role = null } = {}) {
   let selectedArchive = null
   let archiveAccessBusy = false
   let usageError = ''
+  let usageCheckPending = canManage && isClassificationManagementAvailable()
   const pendingIds = new Set()
 
   function showLoading() {
@@ -344,8 +345,13 @@ export function createClassificationPage({ role = null } = {}) {
     const managementAvailable = isClassificationManagementAvailable()
     addButton.disabled = !managementAvailable
     migrationNotice.hidden = !canManage || managementAvailable
-    const deletionAvailable = isClassificationDeletionAvailable()
+    const deletionAvailable = managementAvailable
+      && !usageCheckPending
+      && !usageError
+      && isClassificationDeletionAvailable()
     if (!canManage || !managementAvailable) {
+      usageNotice.hidden = true
+    } else if (usageCheckPending) {
       usageNotice.hidden = true
     } else if (!deletionAvailable) {
       usageNotice.textContent = usageError
@@ -415,14 +421,20 @@ export function createClassificationPage({ role = null } = {}) {
         toggleButton.disabled = !managementAvailable || pendingIds.has(record.id)
         actions.append(editButton, toggleButton)
       }
-      if (canManage && deletionAvailable) {
+      if (canManage) {
         const canDelete = record.dipakai === false
         const deleteButton = makeButton('Hapus', 'button button-danger', () => openDelete(record))
-        deleteButton.disabled = !canDelete || pendingIds.has(record.id)
-        if (!canDelete) {
-          deleteButton.title = record.dipakai
+        deleteButton.disabled = !deletionAvailable || !canDelete || pendingIds.has(record.id)
+        if (!deletionAvailable) {
+          deleteButton.title = usageCheckPending
+            ? 'Sedang memeriksa arsip yang memakai klasifikasi.'
+            : usageError || 'Status penggunaan belum dapat dipastikan.'
+        } else if (!canDelete) {
+          deleteButton.title = record.dipakai === true
             ? 'Tidak dapat dihapus karena masih dipakai arsip.'
             : 'Status penggunaan belum dapat dipastikan.'
+        }
+        if (deleteButton.disabled) {
           deleteButton.setAttribute('aria-label', `Hapus ${record.kode}: ${deleteButton.title}`)
         }
         actions.append(deleteButton)
@@ -449,7 +461,10 @@ export function createClassificationPage({ role = null } = {}) {
   }
 
   function openDelete(record) {
-    if (deleting || !isClassificationDeletionAvailable() || record.dipakai !== false) return
+    if (deleting || usageCheckPending || usageError
+      || !isClassificationManagementAvailable()
+      || !isClassificationDeletionAvailable()
+      || record.dipakai !== false) return
     deletingRecord = record
     deleteMessage.textContent = `Klasifikasi ${record.kode} · ${record.nama} akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.`
     deleteStatus.textContent = ''
@@ -910,6 +925,8 @@ export function createClassificationPage({ role = null } = {}) {
     const request = ++requestVersion
     const cacheParams = { includeInactive: true }
     const cached = getReadCache('classifications', cacheParams)
+    usageCheckPending = canManage && isClassificationManagementAvailable()
+    usageError = ''
     if (cached) renderRecords(cached)
     else showLoading()
     try {
@@ -923,6 +940,7 @@ export function createClassificationPage({ role = null } = {}) {
         try {
           const usage = await fetchClassificationUsage()
           if (!active || request !== requestVersion) return
+          usageCheckPending = false
           usageError = ''
           const usageById = new Map(usage.map((item) => [item.id, item.dipakai]))
           nextRecords = nextRecords.map((record) => ({
@@ -932,6 +950,7 @@ export function createClassificationPage({ role = null } = {}) {
         } catch (error) {
           if (!active || request !== requestVersion) return
           console.error('Gagal memeriksa penggunaan klasifikasi:', error)
+          usageCheckPending = false
           usageError = error.message
         }
       }
@@ -939,6 +958,9 @@ export function createClassificationPage({ role = null } = {}) {
     } catch (error) {
       if (!active || request !== requestVersion) return
       console.error('Gagal memuat klasifikasi:', error)
+      usageCheckPending = false
+      usageError = 'Status penggunaan klasifikasi belum dapat diperiksa. Penghapusan permanen dinonaktifkan.'
+      if (cached) renderRecords(cached)
       if (cached) showError(error.message, true)
       else showError(error.message)
     }

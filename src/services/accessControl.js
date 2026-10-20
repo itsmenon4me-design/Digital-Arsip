@@ -14,11 +14,6 @@ const routesByRole = {
     '/unggah',
     '/klasifikasi',
   ]),
-  staf: new Set([
-    '/beranda',
-    '/arsip',
-    '/klasifikasi',
-  ]),
 }
 
 export function isKnownRole(role) {

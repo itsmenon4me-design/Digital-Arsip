@@ -127,9 +127,71 @@
 
 .page-content {
   width: 100%;
-  max-width: 1720px;
+  min-width: 0;
+  max-width: 1600px;
   margin-inline: auto;
   padding: 30px clamp(20px, 3vw, 42px) 42px;
+}
+
+.page-content > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.profile-loading-state {
+  display: grid;
+  align-content: start;
+  gap: 24px;
+}
+
+.profile-loading-panel {
+  display: grid;
+  min-height: 300px;
+  align-content: start;
+  gap: 24px;
+  padding: clamp(18px, 2.4vw, 30px);
+}
+
+.profile-loading-panel-heading {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+}
+
+.profile-loading-placeholder-group {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-loading-placeholder {
+  display: block;
+  border-radius: 5px;
+  background: var(--surface-skeleton);
+}
+
+.profile-loading-placeholder-title {
+  width: min(240px, 60%);
+  height: 22px;
+}
+
+.profile-loading-placeholder-row {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--gold-border);
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--surface-skeleton) 48%,
+    var(--surface) 100%
+  );
+}
+
+.profile-loading-placeholder-row-2 {
+  width: 94%;
+}
+
+.profile-loading-placeholder-row-3 {
+  width: 97%;
 }
 
 .dashboard-page {

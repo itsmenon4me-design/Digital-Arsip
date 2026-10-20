@@ -41,6 +41,8 @@ export function createRetentionSchedulePage() {
     onDestroy: (archive) => workflows?.openDestruction(archive),
   })
   detail.element.hidden = true
+  const grid = document.createElement('div')
+  grid.className = 'archive-list-grid'
   const table = createArsipTable({
     titleText: 'Arsip melewati masa retensi',
     showFilters: false,
@@ -67,8 +69,6 @@ export function createRetentionSchedulePage() {
     onSelect: (id) => selectArchive(id),
     onRetry: () => loadDestroyedArchives(destroyedPage),
   })
-  const grid = document.createElement('div')
-  grid.className = 'archive-list-grid'
   grid.append(table.element, detail.element)
   root.append(heading, grid, destroyedTable.element)
 

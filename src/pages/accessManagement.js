@@ -11,6 +11,12 @@ function createRetryButton(onRetry) {
   return button
 }
 
+function getRoleLabel(role) {
+  if (role === 'admin') return 'Admin'
+  if (role === 'petugas_arsip') return 'Petugas'
+  return 'Tidak tersedia'
+}
+
 export function createAccessManagementPage({ role, roleLoaded = false } = {}) {
   const root = document.createElement('div')
   root.className = 'reference-page access-page'
@@ -94,7 +100,7 @@ export function createAccessManagementPage({ role, roleLoaded = false } = {}) {
       const row = document.createElement('tr')
       ;[
         record.email,
-        record.role,
+        getRoleLabel(record.role),
         record.status,
         record.created_at
           ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium' }).format(new Date(record.created_at))

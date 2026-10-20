@@ -355,6 +355,23 @@
   margin-bottom: 2px;
 }
 
+@media (min-width: 561px) {
+  .dashboard-page .archive-panel-header .archive-filters {
+    display: grid;
+    flex: 0 0 320px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-page .archive-panel-header .filter-control {
+    min-width: 0;
+  }
+
+  .dashboard-page .archive-panel-header .filter-control select {
+    width: 100%;
+    max-width: none;
+  }
+}
+
 .archive-filters {
   display: flex;
   align-items: end;
@@ -511,6 +528,40 @@
   width: 100%;
 }
 
+@media (min-width: 561px) {
+  .archive-list-page .archive-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 260px) repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .archive-list-page .archive-filters > .filter-control,
+  .archive-list-page .archive-filters > .archive-list-search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .archive-list-page .archive-filters > .filter-control select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .archive-list-page .archive-additional-filters {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 561px) and (max-width: 700px) {
+  .archive-list-page .archive-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .archive-list-page .archive-list-search {
+    grid-column: 1 / -1;
+  }
+}
+
 .retention-page .archive-table {
   min-width: 0;
   table-layout: fixed;
@@ -597,6 +648,31 @@
 
 .audit-table {
   min-width: 850px;
+  table-layout: fixed;
+}
+
+.audit-table th:nth-child(1) {
+  width: 18%;
+}
+
+.audit-table th:nth-child(2) {
+  width: 21%;
+}
+
+.audit-table th:nth-child(3) {
+  width: 11%;
+}
+
+.audit-table th:nth-child(4) {
+  width: 12%;
+}
+
+.audit-table th:nth-child(5) {
+  width: 38%;
+}
+
+.audit-table td {
+  overflow-wrap: anywhere;
 }
 
 .audit-detail {
@@ -1178,8 +1254,10 @@
 }
 
 .stat-value.skeleton {
+  display: block;
   width: min(150px, 75%);
-  height: 32px;
+  min-height: 1.2em;
+  height: auto;
   background: var(--surface-skeleton);
 }
 
@@ -1302,6 +1380,12 @@
   background: var(--disabled-bg);
   border-color: var(--input-border);
   opacity: 1;
+}
+
+.button-primary:disabled {
+  border-color: var(--gold-border-strong);
+  color: var(--gold-light);
+  background: var(--gold-surface);
 }
 
 .avatar-button:focus-visible,

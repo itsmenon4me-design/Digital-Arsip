@@ -64,10 +64,8 @@ export function createSidebar() {
       footer.textContent = role === 'admin'
         ? 'Sesi admin aktif'
         : role === 'petugas_arsip'
-          ? 'Sesi petugas arsip aktif'
-          : role === 'staf'
-            ? 'Sesi staf aktif'
-            : 'Fitur akun sedang dimuat'
+          ? 'Sesi petugas aktif'
+          : 'Fitur akun sedang dimuat'
     },
     open() {
       element.classList.add('is-open')

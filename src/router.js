@@ -39,6 +39,7 @@ export function createRouter({
   onRetryProfile = () => {},
 }) {
   let cleanupCurrentPage = null
+  let currentRoute = null
   const prefetchingRoutes = new Set()
 
   function prefetchRoute(route) {
@@ -132,19 +133,64 @@ export function createRouter({
       return
     }
     const role = getRole()
-    const route = isRoleLoaded() && canAccessRoute(role, requestedRoute)
-      ? requestedRoute
-      : '/beranda'
-    if (isRoleLoaded() && role && requestedRoute !== route) {
+    const roleLoaded = isRoleLoaded()
+    const route = roleLoaded
+      ? canAccessRoute(role, requestedRoute) ? requestedRoute : '/beranda'
+      : pages[requestedRoute] ? requestedRoute : '/beranda'
+    if (roleLoaded && role && requestedRoute !== route) {
       window.location.hash = route
     }
     const page = pages[route] ?? pages['/beranda']
+    if (currentRoute !== route) {
+      window.scrollTo(0, 0)
+      currentRoute = route
+    }
     topbar.setPageTitle(page.title)
     topbar.setSearchVisible(route === '/beranda')
     cleanupCurrentPage?.()
     cleanupCurrentPage = null
 
-    if (isRoleLoaded() && !role) {
+    if (!roleLoaded) {
+      const state = document.createElement('section')
+      state.className = 'profile-loading-state reference-page'
+      state.setAttribute('role', 'status')
+      state.setAttribute('aria-live', 'polite')
+      const heading = document.createElement('section')
+      heading.className = 'page-heading'
+      const headingCopy = document.createElement('div')
+      const kicker = document.createElement('p')
+      kicker.className = 'section-kicker'
+      kicker.textContent = 'MENYIAPKAN HALAMAN'
+      const title = document.createElement('h2')
+      title.textContent = page.title
+      const description = document.createElement('p')
+      description.textContent = 'Memeriksa akses akun sebelum menampilkan isi halaman.'
+      headingCopy.append(kicker, title, description)
+      heading.append(headingCopy)
+
+      const panel = document.createElement('section')
+      panel.className = 'panel profile-loading-panel'
+      const panelHeading = document.createElement('div')
+      panelHeading.className = 'profile-loading-panel-heading'
+      panelHeading.setAttribute('aria-hidden', 'true')
+      const titlePlaceholder = document.createElement('span')
+      titlePlaceholder.className = 'profile-loading-placeholder profile-loading-placeholder-title'
+      const contentPlaceholder = document.createElement('div')
+      contentPlaceholder.className = 'profile-loading-placeholder-group'
+      contentPlaceholder.setAttribute('aria-hidden', 'true')
+      for (let index = 0; index < 5; index += 1) {
+        const row = document.createElement('span')
+        row.className = `profile-loading-placeholder profile-loading-placeholder-row profile-loading-placeholder-row-${index % 3 + 1}`
+        contentPlaceholder.append(row)
+      }
+      panelHeading.append(titlePlaceholder)
+      panel.append(panelHeading, contentPlaceholder)
+      state.append(heading, panel)
+      outlet.replaceChildren(state)
+      return
+    }
+
+    if (!role) {
       const state = document.createElement('section')
       state.className = 'panel access-restriction-state'
       state.setAttribute('role', 'status')
@@ -156,7 +202,7 @@ export function createRouter({
       retry.textContent = 'Coba lagi'
       retry.addEventListener('click', onRetryProfile)
       heading.textContent = 'Peran akun belum tersedia'
-      message.textContent = 'Profil akun belum tersedia atau gagal dibaca. Minta administrator memastikan profil memiliki peran admin, petugas arsip, atau staf, lalu coba lagi.'
+      message.textContent = 'Profil akun belum tersedia atau gagal dibaca. Minta administrator memastikan profil memiliki peran admin atau petugas, lalu coba lagi.'
       state.append(heading, message, retry)
       outlet.replaceChildren(state)
       return
@@ -173,12 +219,12 @@ export function createRouter({
     const renderedPage = page.render({
       title: page.title,
       role,
-      roleLoaded: isRoleLoaded(),
+      roleLoaded,
     })
     if (renderedPage.element instanceof HTMLElement) {
       outlet.replaceChildren(renderedPage.element)
       cleanupCurrentPage = renderedPage.destroy ?? null
-      if (isRoleLoaded() && window.location.hash !== `#${route}`) {
+      if (window.location.hash !== `#${route}`) {
         window.location.hash = route
       }
     } else {
