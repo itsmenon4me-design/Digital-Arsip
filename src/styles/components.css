@@ -955,10 +955,6 @@
   object-fit: cover;
 }
 
-.classification-archive-preview img.is-loading {
-  clip-path: inset(0 0 100% 0);
-}
-
 .classification-archive-preview video {
   pointer-events: none;
 }

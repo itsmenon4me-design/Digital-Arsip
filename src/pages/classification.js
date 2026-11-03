@@ -552,12 +552,11 @@ export function createClassificationPage({ role = null } = {}) {
       ? document.createElement('img')
       : imageOrUrl
     image.alt = ''
-    image.loading = 'lazy'
+    image.loading = 'eager'
     image.dataset.previewRequest = String(request)
     image.addEventListener('load', () => {
       if (active && archivesDialog.open && request === archivesRequestVersion) {
         preview.querySelector('.classification-file-icon')?.remove()
-        image.classList.remove('is-loading')
         cacheArchivePreview(archive.id, image)
       }
     }, { once: true })
@@ -575,9 +574,6 @@ export function createClassificationPage({ role = null } = {}) {
     }, { once: true })
     if (cached) {
       preview.querySelector('.classification-file-icon')?.remove()
-      image.classList.remove('is-loading')
-    } else {
-      image.classList.add('is-loading')
     }
     preview.append(image)
     if (typeof imageOrUrl === 'string') image.src = imageOrUrl
