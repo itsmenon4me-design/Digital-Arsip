@@ -2,9 +2,18 @@ import { supabase } from '../lib/supabase.js'
 import { clearReadCache, getReadCache, loadReadRequest, setReadCache } from './readCache.js'
 
 const ARCHIVE_SELECT =
-  'id, nomor_arsip, judul, kategori, status, unit_pencipta, masa_retensi_tahun, tanggal_retensi, tingkat_akses, file_path, nama_berkas, ukuran_file, file_status, created_at, klasifikasi(nama)'
+  'id, nomor_arsip, judul, kategori, status, unit_pencipta, masa_retensi_tahun, tanggal_retensi, tingkat_akses, file_path, nama_berkas, ukuran_file, tipe_file, file_status, created_at, tanggal_publikasi, kanal_publikasi, nama_kegiatan, jenis_konten, penulis, tautan_publikasi, kata_kunci, klasifikasi(nama)'
 
 const MAX_ARCHIVE_FILE_BYTES = 50 * 1024 * 1024
+export const ARCHIVE_CONTENT_TYPES = [
+  'siaran pers',
+  'berita',
+  'foto kegiatan',
+  'video',
+  'infografis',
+  'postingan media sosial',
+  'lainnya',
+]
 let classificationManagementAvailable = null
 let classificationDeletionAvailable = null
 const FILE_TYPES = {
@@ -55,6 +64,20 @@ function quotePostgrestValue(value) {
 function friendlyReadError(error, resource) {
   const code = String(error?.code ?? '').toLowerCase()
   const message = String(error?.message ?? '').toLowerCase()
+  const details = [message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const publicationColumns = ['jenis_konten', 'penulis', 'tautan_publikasi', 'kata_kunci', 'tipe_file']
+  if (
+    (code === '42703' || code === 'pgrst204')
+    && publicationColumns.some((column) => details.includes(column))
+  ) {
+    return 'Metadata publikasi belum tersedia. Minta administrator menerapkan migration 20261103180000_publication_metadata.sql, lalu coba lagi.'
+  }
+  if (code === 'pgrst202' && message.includes('search_arsip_by_publication')) {
+    return 'Pencarian publikasi belum tersedia. Minta administrator menerapkan migration 20261103180000_publication_metadata.sql, lalu coba lagi.'
+  }
   if (code === '42703' || code === 'pgrst204') {
     if (resource === 'arsip klasifikasi') {
       return 'Struktur data arsip belum diperbarui. Minta administrator memeriksa migrasi SQL 015 dan 016, lalu coba lagi.'
@@ -93,6 +116,22 @@ function isMissingArchiveClassificationRelationship(error) {
 
 export function escapeIlikeValue(value) {
   return quotePostgrestValue(value.replace(/([%_\\])/g, '\\$1'))
+}
+
+function normalizeKeywords(value) {
+  const keywords = Array.isArray(value)
+    ? value
+    : String(value ?? '').split(',')
+  return [...new Set(keywords.map((keyword) => String(keyword).trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'id'))
+}
+
+function archiveSearchQuery(search, options) {
+  return search
+    ? supabase
+        .rpc('search_arsip_by_publication', { p_search: search })
+        .select(ARCHIVE_SELECT, options)
+    : supabase.from('arsip').select(ARCHIVE_SELECT, options)
 }
 
 export function fetchArchiveCategories() {
@@ -409,7 +448,7 @@ function archiveMutationError(error) {
     return 'Anda tidak memiliki izin administrator untuk mengubah arsip.'
   }
   if (code === 'PGRST202') {
-    return 'Fitur ini belum tersedia. Minta administrator memeriksa migrasi SQL 015 atau 016.'
+    return 'Fitur ini belum tersedia. Pastikan migration 20261103180000_publication_metadata.sql sudah diterapkan.'
   }
   if (code === '23514') {
     return 'Klasifikasi tidak aktif. Pilih klasifikasi aktif, lalu coba lagi.'
@@ -438,11 +477,15 @@ export async function updateArchive({
   tanggalPublikasi = null,
   kanalPublikasi = '',
   namaKegiatan = '',
+  jenisKonten = null,
+  penulis = '',
+  tautanPublikasi = '',
+  kataKunci = [],
 }) {
   requireClient()
   let result
   try {
-    result = await supabase.rpc('admin_update_arsip_with_publication', {
+    result = await supabase.rpc('admin_update_arsip_publication_v2', {
       p_id: id,
       p_judul: judul.trim(),
       p_klasifikasi_id: klasifikasiId,
@@ -451,6 +494,10 @@ export async function updateArchive({
       p_tanggal_publikasi: tanggalPublikasi || null,
       p_kanal_publikasi: kanalPublikasi.trim(),
       p_nama_kegiatan: namaKegiatan.trim(),
+      p_jenis_konten: jenisKonten || null,
+      p_penulis: penulis.trim(),
+      p_tautan_publikasi: tautanPublikasi.trim(),
+      p_kata_kunci: normalizeKeywords(kataKunci),
     })
   } catch (error) {
     console.error('RPC edit arsip gagal:', error)
@@ -641,6 +688,26 @@ export async function permanentlyDeleteArchive(id) {
     throw new Error('Arsip tidak ditemukan atau sudah tidak dapat diakses. Muat ulang daftar.')
   }
 
+  if (!result.data.file_path) {
+    throw new Error('Path berkas tidak tersedia. Data arsip tetap dipertahankan karena penghapusan Storage tidak dapat dipastikan.')
+  }
+  let storageResult
+  try {
+    storageResult = await supabase.storage
+      .from('arsip')
+      .remove([result.data.file_path])
+  } catch (error) {
+    console.error('Gagal menghapus berkas sebelum menghapus arsip:', error)
+    throw new Error('Berkas gagal dihapus dari Storage. Data arsip tetap dipertahankan.')
+  }
+  if (storageResult.error) {
+    console.error('Gagal menghapus berkas sebelum menghapus arsip:', storageResult.error)
+    throw new Error(`Berkas gagal dihapus dari Storage. Data arsip tetap dipertahankan. ${storageResult.error.message}`)
+  }
+  if (!Array.isArray(storageResult.data) || storageResult.data.length === 0) {
+    throw new Error('Berkas tidak ditemukan atau penghapusannya belum dapat dipastikan. Data arsip tetap dipertahankan.')
+  }
+
   let deleteResult
   try {
     deleteResult = await supabase
@@ -650,34 +717,19 @@ export async function permanentlyDeleteArchive(id) {
       .select('id')
       .maybeSingle()
   } catch (error) {
-    console.error('Gagal menghapus arsip dari database:', error)
-    throw new Error(permanentDeleteError(error))
+    console.error('Berkas sudah dihapus, tetapi arsip gagal dihapus dari database:', error)
+    throw new Error(`Berkas sudah dihapus, tetapi arsip gagal dihapus dari database. ${permanentDeleteError(error)}`)
   }
   if (deleteResult.error) {
-    console.error('Gagal menghapus arsip dari database:', deleteResult.error)
-    throw new Error(permanentDeleteError(deleteResult.error))
+    console.error('Berkas sudah dihapus, tetapi arsip gagal dihapus dari database:', deleteResult.error)
+    throw new Error(`Berkas sudah dihapus, tetapi arsip gagal dihapus dari database. ${permanentDeleteError(deleteResult.error)}`)
   }
   if (!deleteResult.data) {
-    throw new Error('Arsip tidak terhapus. Pastikan akun Anda admin dan arsip masih tersedia.')
+    throw new Error('Berkas sudah dihapus, tetapi arsip tidak terhapus. Pastikan akun Anda admin dan muat ulang daftar.')
   }
+
   clearReadCache()
   notifyArchiveDataUpdated()
-
-  if (!result.data.file_path) return { storageDeleted: true }
-
-  try {
-    const storageResult = await supabase.storage
-      .from('arsip')
-      .remove([result.data.file_path])
-    if (storageResult.error) {
-      console.error('Arsip sudah dihapus dari database, tetapi file gagal dihapus dari Storage:', storageResult.error)
-      return { storageDeleted: false }
-    }
-  } catch (error) {
-    console.error('Arsip sudah dihapus dari database, tetapi file gagal dihapus dari Storage:', error)
-    return { storageDeleted: false }
-  }
-
   return { storageDeleted: true }
 }
 
@@ -699,7 +751,7 @@ function friendlyArchiveError(error, fallback) {
   if (code === '23505') return 'Nomor arsip sudah digunakan. Masukkan nomor arsip lain.'
   if (code === '23514') return 'Klasifikasi sudah dinonaktifkan. Pilih klasifikasi aktif, lalu coba lagi.'
   if (code === 'pgrst202' || code === 'pgrst204') {
-    return 'Fitur berkas atau alur arsip belum siap. Minta administrator memeriksa migrasi SQL 006, 014, dan 015.'
+    return 'Fitur arsip publikasi belum siap. Pastikan migration 20261103180000_publication_metadata.sql sudah diterapkan.'
   }
   if (code === '42501' || message.includes('row-level security') || message.includes('permission denied')) {
     return 'Akun Anda tidak memiliki izin untuk melakukan tindakan ini.'
@@ -716,6 +768,12 @@ function friendlyArchiveError(error, fallback) {
 export async function uploadArchive({ file, metadata }) {
   requireClient()
   const contentType = validateArchiveFile(file)
+  if (!metadata.tanggalPublikasi || !metadata.kanalPublikasi?.trim()) {
+    throw new Error('Tanggal publikasi dan kanal publikasi wajib diisi.')
+  }
+  if (!ARCHIVE_CONTENT_TYPES.includes(metadata.jenisKonten)) {
+    throw new Error('Pilih jenis konten yang tersedia.')
+  }
   const id = crypto.randomUUID()
   const extension = file.name.split('.').pop().toLowerCase()
   const filePath = `${id}/${id}.${extension}`
@@ -739,15 +797,20 @@ export async function uploadArchive({ file, metadata }) {
     judul: metadata.judul.trim(),
     kategori: metadata.kategori.trim(),
     klasifikasi_id: metadata.klasifikasiId,
-    unit_pencipta: 'Humas Polres Metro Kota Bekasi',
+    unit_pencipta: 'Humas Polres Metro Bekasi Kota',
     masa_retensi_tahun: metadata.masaRetensiTahun,
     tanggal_retensi: metadata.tanggalRetensi,
     tanggal_publikasi: metadata.tanggalPublikasi || null,
     kanal_publikasi: metadata.kanalPublikasi?.trim() || null,
     nama_kegiatan: metadata.namaKegiatan?.trim() || null,
+    jenis_konten: metadata.jenisKonten,
+    penulis: metadata.penulis?.trim() || null,
+    tautan_publikasi: metadata.tautanPublikasi?.trim() || null,
+    kata_kunci: normalizeKeywords(metadata.kataKunci),
     tingkat_akses: metadata.tingkatAkses,
     file_path: filePath,
     nama_berkas: file.name,
+    tipe_file: contentType,
     file_status: 'mengunggah',
     ukuran_file: file.size,
     diunggah_oleh: userData.user.id,
@@ -871,21 +934,14 @@ export async function createArchiveAccessUrl(archive, action, expiresIn = 60) {
 export function fetchRecentArchives({ category = '', status = '', search = '' } = {}) {
   requireClient()
   return loadReadRequest('recent-archives', { category, status, search }, async () => {
-    let query = supabase
-      .from('arsip')
-      .select(ARCHIVE_SELECT)
+    let query = archiveSearchQuery(search)
       .eq('file_status', 'tersedia')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(10)
 
     if (category) query = query.eq('kategori', category)
     if (status) query = query.eq('status', status)
-
-    if (search) {
-      const pattern = `"%${escapeIlikeValue(search)}%"`
-      query = query.or(`nomor_arsip.ilike.${pattern},judul.ilike.${pattern}`)
-    }
 
     let result
     try {
@@ -910,6 +966,10 @@ export function fetchArchivePage({
   classificationId = '',
   fromDate = '',
   toDate = '',
+  publicationFromDate = '',
+  publicationToDate = '',
+  contentType = '',
+  channel = '',
   unit = '',
 } = {}) {
   requireClient()
@@ -922,6 +982,10 @@ export function fetchArchivePage({
     classificationId,
     fromDate,
     toDate,
+    publicationFromDate,
+    publicationToDate,
+    contentType,
+    channel,
     unit,
   }
   return loadReadRequest('archive-page', requestParams, async () => {
@@ -929,9 +993,7 @@ export function fetchArchivePage({
     const safePageSize = Math.min(100, Math.max(1, Math.floor(pageSize)))
     const from = (safePage - 1) * safePageSize
     const to = from + safePageSize - 1
-    let query = supabase
-      .from('arsip')
-      .select(ARCHIVE_SELECT, { count: 'exact' })
+    let query = archiveSearchQuery(search, { count: 'exact' })
       .eq('file_status', 'tersedia')
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
@@ -946,11 +1008,13 @@ export function fetchArchivePage({
       until.setDate(until.getDate() + 1)
       query = query.lt('created_at', until.toISOString())
     }
-    if (unit) query = query.eq('unit_pencipta', unit)
-    if (search) {
-      const pattern = `"%${escapeIlikeValue(search)}%"`
-      query = query.or(`nomor_arsip.ilike.${pattern},judul.ilike.${pattern}`)
+    if (contentType) query = query.eq('jenis_konten', contentType)
+    if (channel) {
+      query = query.ilike('kanal_publikasi', `%${escapeIlikeValue(channel)}%`)
     }
+    if (publicationFromDate) query = query.gte('tanggal_publikasi', publicationFromDate)
+    if (publicationToDate) query = query.lte('tanggal_publikasi', publicationToDate)
+    if (unit) query = query.eq('unit_pencipta', unit)
 
     let result
     try {

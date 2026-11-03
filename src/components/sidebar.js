@@ -3,7 +3,6 @@ import { canAccessRoute } from '../services/accessControl.js'
 const menuItems = [
   { path: '/beranda', label: 'Beranda' },
   { path: '/arsip', label: 'Daftar Arsip' },
-  { path: '/unggah', label: 'Unggah & Digitalisasi' },
   { path: '/klasifikasi', label: 'Klasifikasi' },
   { path: '/retensi', label: 'Jadwal Retensi' },
   { path: '/akses', label: 'Hak Akses' },
@@ -19,11 +18,16 @@ export function createSidebar() {
   brand.className = 'sidebar-brand'
   brand.href = '#/beranda'
 
+  const logo = document.createElement('img')
+  logo.className = 'brand-logo'
+  logo.src = '/polda-metro-jaya.png'
+  logo.alt = 'Lambang Polda Metro Jaya'
+
   const institution = document.createElement('span')
   institution.className = 'brand-institution'
-  institution.textContent = 'Humas Polres Metro Kota Bekasi'
+  institution.textContent = 'Humas Polres Metro Bekasi Kota'
 
-  brand.append(institution)
+  brand.append(logo, institution)
 
   const navigation = document.createElement('nav')
   navigation.className = 'sidebar-navigation'

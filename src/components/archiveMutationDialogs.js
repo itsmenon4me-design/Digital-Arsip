@@ -1,4 +1,5 @@
 import {
+  ARCHIVE_CONTENT_TYPES,
   fetchClassifications,
   permanentlyDeleteArchive,
   updateArchive,
@@ -69,6 +70,15 @@ function classificationOptions(classifications, currentId) {
   ]
 }
 
+function normalizeKeywords(value) {
+  return [...new Set(
+    String(value ?? '')
+      .split(',')
+      .map((keyword) => keyword.trim())
+      .filter(Boolean),
+  )].sort()
+}
+
 function mutationMessage(error) {
   const code = String(error?.code ?? '').toUpperCase()
   if (code === '42501') return 'Akses administrator diperlukan untuk tindakan ini.'
@@ -101,11 +111,21 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
   unitField.control.required = true
   unitField.control.maxLength = 255
   unitField.control.autocomplete = 'organization'
+  const contentTypeField = makeField('Jenis konten', 'jenis-konten', 'select')
+  setOptions(contentTypeField.control, [
+    ['', 'Belum ditentukan'],
+    ...ARCHIVE_CONTENT_TYPES.map((value) => [value, value]),
+  ])
   const publicationDateField = makeField('Tanggal publikasi (opsional)', 'tanggal-publikasi', 'date')
   const publicationChannelField = makeField('Kanal publikasi (opsional)', 'kanal-publikasi')
   publicationChannelField.control.maxLength = 120
   const eventNameField = makeField('Nama kegiatan (opsional)', 'nama-kegiatan')
   eventNameField.control.maxLength = 255
+  const authorField = makeField('Penulis atau pembuat konten (opsional)', 'penulis')
+  authorField.control.maxLength = 255
+  const publicationUrlField = makeField('Tautan publikasi asli (opsional)', 'tautan-publikasi', 'url')
+  publicationUrlField.control.maxLength = 2048
+  const keywordsField = makeField('Kata kunci (pisahkan dengan koma, opsional)', 'kata-kunci')
   const accessField = makeField('Hak akses', 'hak-akses', 'select')
   setOptions(accessField.control, ACCESS_LEVELS)
   const editStatus = document.createElement('p')
@@ -121,9 +141,13 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
     titleField.label,
     classificationField.label,
     unitField.label,
+    contentTypeField.label,
     publicationDateField.label,
     publicationChannelField.label,
     eventNameField.label,
+    authorField.label,
+    publicationUrlField.label,
+    keywordsField.label,
     accessField.label,
     editIntro,
     editStatus,
@@ -181,6 +205,10 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
       tanggalPublikasi: publicationDateField.control.value || null,
       kanalPublikasi: publicationChannelField.control.value.trim(),
       namaKegiatan: eventNameField.control.value.trim(),
+      jenisKonten: contentTypeField.control.value || null,
+      penulis: authorField.control.value.trim(),
+      tautanPublikasi: publicationUrlField.control.value.trim(),
+      kataKunci: normalizeKeywords(keywordsField.control.value),
     }
   }
 
@@ -194,6 +222,11 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
       || values.tanggalPublikasi !== (editArchive.tanggal_publikasi ?? null)
       || values.kanalPublikasi !== (editArchive.kanal_publikasi ?? '')
       || values.namaKegiatan !== (editArchive.nama_kegiatan ?? '')
+      || values.jenisKonten !== (editArchive.jenis_konten ?? null)
+      || values.penulis !== (editArchive.penulis ?? '')
+      || values.tautanPublikasi !== (editArchive.tautan_publikasi ?? '')
+      || JSON.stringify(values.kataKunci)
+        !== JSON.stringify(normalizeKeywords(editArchive.kata_kunci ?? []))
   }
 
   function updateEditState() {
@@ -235,6 +268,13 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
       valid = false
     } else {
       setFieldError(unitField, '')
+    }
+
+    if (!publicationUrlField.control.checkValidity()) {
+      setFieldError(publicationUrlField, 'Masukkan URL publikasi yang valid.')
+      valid = false
+    } else {
+      setFieldError(publicationUrlField, '')
     }
 
     return valid
@@ -304,6 +344,10 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
     publicationDateField.control,
     publicationChannelField.control,
     eventNameField.control,
+    contentTypeField.control,
+    authorField.control,
+    publicationUrlField.control,
+    keywordsField.control,
     accessField.control,
   ]
     .forEach((control) => control.addEventListener('input', updateEditState))
@@ -403,6 +447,12 @@ export function createArchiveMutationDialogs({ onUpdated, onDeleted }) {
       publicationDateField.control.value = archive.tanggal_publikasi ?? ''
       publicationChannelField.control.value = archive.kanal_publikasi ?? ''
       eventNameField.control.value = archive.nama_kegiatan ?? ''
+      contentTypeField.control.value = archive.jenis_konten ?? ''
+      authorField.control.value = archive.penulis ?? ''
+      publicationUrlField.control.value = archive.tautan_publikasi ?? ''
+      keywordsField.control.value = Array.isArray(archive.kata_kunci)
+        ? archive.kata_kunci.join(', ')
+        : ''
       setOptions(accessField.control, ACCESS_LEVELS)
       accessField.control.value = archive.tingkat_akses ?? 'internal'
       const cachedClassifications = getReadCache('classifications', { includeInactive: true })

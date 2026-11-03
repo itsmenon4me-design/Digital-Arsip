@@ -1,16 +1,12 @@
 import {
-  fetchArchiveCategories,
-  fetchArchiveDetail,
   fetchRecentArchives,
 } from '../services/arsipService.js'
 import { fetchDashboardStats, formatStorageBytes } from '../services/statService.js'
 import { createStatCards } from '../components/statCards.js'
 import { createArsipTable } from '../components/arsipTable.js'
 import { createDropzone } from '../components/dropzone.js'
-import { createDetailPanel } from '../components/detailPanel.js'
 import { createUploadModal } from '../components/uploadModal.js'
 import { getReadCache } from '../services/readCache.js'
-import { createArchiveMutationDialogs } from '../components/archiveMutationDialogs.js'
 import { canManageArchives } from '../services/accessControl.js'
 
 function createDashboardHeader() {
@@ -31,7 +27,6 @@ function createDashboardHeader() {
 
 export function createBerandaPage({ role = null } = {}) {
   const canManage = canManageArchives(role)
-  const canDelete = role === 'admin'
   const root = document.createElement('div')
   root.className = 'dashboard-page'
   const heading = createDashboardHeader()
@@ -64,79 +59,16 @@ export function createBerandaPage({ role = null } = {}) {
 
   stats = createStatCards(loadStats, { showRetention: role === 'admin' })
   const grid = document.createElement('div')
-  grid.className = 'dashboard-grid'
+  grid.className = 'dashboard-archive-grid'
 
-  let mutations
-  const detail = createDetailPanel({
-    onEdit: canManage ? (archive) => mutations?.openEdit(archive) : null,
-    onDelete: canDelete ? (archive) => mutations?.openDelete(archive) : null,
-  })
   let table
   let active = true
-  let categoriesLoaded = false
-  let categoriesRequest = null
-  let categoriesGeneration = 0
   let search = ''
   let archiveRequest = 0
-  let detailRequest = 0
-
-  async function selectArchive(id) {
-    const request = ++detailRequest
-    if (!id) {
-      detail.render(null)
-      return
-    }
-
-    const cached = getReadCache('archive-detail', id)
-    if (cached) detail.render(cached)
-    else detail.showLoading()
-    try {
-      const record = await fetchArchiveDetail(id)
-      if (active && request === detailRequest) detail.render(record)
-    } catch (error) {
-      if (active && request === detailRequest) {
-        console.error('Gagal memuat detail arsip:', error)
-        detail.showError()
-      }
-    }
-  }
-
-  function invalidateCategories() {
-    categoriesLoaded = false
-    categoriesRequest = null
-    categoriesGeneration += 1
-  }
-
-  function loadCategories() {
-    if (categoriesLoaded) return Promise.resolve()
-    const cachedCategories = getReadCache('archive-categories')
-    if (cachedCategories) {
-      table.setCategories(cachedCategories)
-      categoriesLoaded = true
-      return Promise.resolve()
-    }
-    if (!categoriesRequest) {
-      const generation = categoriesGeneration
-      categoriesRequest = fetchArchiveCategories()
-        .then((categories) => {
-          if (active && generation === categoriesGeneration) {
-            table.setCategories(categories)
-            categoriesLoaded = true
-          }
-          return categories
-        })
-        .catch((error) => {
-          if (generation === categoriesGeneration) categoriesRequest = null
-          throw error
-        })
-    }
-    return categoriesRequest
-  }
 
   async function loadArchives() {
     const request = ++archiveRequest
-    const { category, status } = table.getFilters()
-    const filters = { category, status, search }
+    const filters = { category: '', status: '', search }
     const cachedRecords = getReadCache('recent-archives', filters)
     if (cachedRecords) {
       table.setRecords(cachedRecords, { searchActive: Boolean(search) })
@@ -144,76 +76,38 @@ export function createBerandaPage({ role = null } = {}) {
       table.showLoading()
     }
 
-    let categoryError = ''
-    let archiveError = ''
     let recordsDisplayed = Boolean(cachedRecords)
-    const categoriesTask = loadCategories().catch((error) => {
-      if (!active || request !== archiveRequest) return
-      categoryError = error.message
-      console.error('Gagal memuat kategori arsip:', error)
-    })
 
     try {
       const records = await fetchRecentArchives(filters)
       if (active && request === archiveRequest) {
         table.setRecords(records, { searchActive: Boolean(search) })
         recordsDisplayed = true
-        if (categoryError) table.showError(categoryError, { preserveRecords: true })
       }
     } catch (error) {
       if (active && request === archiveRequest) {
-        archiveError = error.message
-        table.showError(archiveError, { preserveRecords: recordsDisplayed })
+        console.error('Gagal memuat arsip terbaru:', error)
+        table.showError(error.message, { preserveRecords: recordsDisplayed })
       }
-    }
-    await categoriesTask
-    if (active && request === archiveRequest && (categoryError || archiveError)) {
-      table.showError(
-        [archiveError, categoryError].filter(Boolean).join(' '),
-        { preserveRecords: recordsDisplayed },
-      )
     }
   }
 
   table = createArsipTable({
-    onFilter: loadArchives,
-    onSelect: selectArchive,
+    showFilters: false,
+    selectable: false,
     onRetry: loadArchives,
   })
 
-  mutations = createArchiveMutationDialogs({
-    onUpdated(record) {
-      table.updateRecord(record.id, record)
-      detail.render(record)
-    },
-    async onDeleted(id) {
-      table.removeRecord(id)
-      detail.render(null)
-      invalidateCategories()
-      await Promise.allSettled([loadStats(), loadArchives()])
-      detail.focusHeading()
-    },
-  })
-
   const uploadModal = createUploadModal({
-    onComplete: async () => {
-      invalidateCategories()
-      await Promise.allSettled([loadStats(), loadArchives()])
-    },
+    onComplete: async () => Promise.allSettled([loadStats(), loadArchives()]),
   })
   const openUpload = (event) => uploadModal.open(event.detail?.file ?? null)
   window.addEventListener('archive-upload-request', openUpload)
 
-  const rightColumn = document.createElement('div')
-  rightColumn.className = 'dashboard-side-column'
   const dropzone = createDropzone({ onUpload: (file) => uploadModal.open(file) })
   dropzone.hidden = !canManage
-  rightColumn.append(
-    dropzone,
-    detail.element,
-  )
-  grid.append(table.element, rightColumn)
-  root.append(heading, stats.element, grid)
+  grid.append(table.element)
+  root.append(heading, stats.element, dropzone, grid)
 
   const onSearch = (event) => {
     search = event.detail
@@ -228,11 +122,9 @@ export function createBerandaPage({ role = null } = {}) {
     destroy() {
       active = false
       archiveRequest += 1
-      detailRequest += 1
       window.removeEventListener('archive-search', onSearch)
       window.removeEventListener('archive-upload-request', openUpload)
       uploadModal.destroy()
-      mutations.destroy()
     },
   }
 }

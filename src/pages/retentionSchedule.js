@@ -43,6 +43,17 @@ export function createRetentionSchedulePage() {
   detail.element.hidden = true
   const grid = document.createElement('div')
   grid.className = 'archive-list-grid'
+  const detailView = document.createElement('section')
+  detailView.className = 'retention-detail-view'
+  detailView.hidden = true
+  const backButton = document.createElement('button')
+  backButton.type = 'button'
+  backButton.className = 'button button-outline'
+  backButton.textContent = 'Kembali ke daftar'
+  const detailHeading = document.createElement('h2')
+  detailHeading.tabIndex = -1
+  detailHeading.textContent = 'Detail Arsip'
+  detailView.append(backButton, detailHeading, detail.element)
   const table = createArsipTable({
     titleText: 'Arsip melewati masa retensi',
     showFilters: false,
@@ -56,6 +67,8 @@ export function createRetentionSchedulePage() {
     onSelect: (id) => selectArchive(id),
     onRetry: () => loadArchives(currentPage),
   })
+  const tableHeading = table.element.querySelector('.archive-panel-header h2')
+  tableHeading?.setAttribute('tabindex', '-1')
   const destroyedTable = createArsipTable({
     titleText: 'Riwayat arsip dimusnahkan',
     showFilters: false,
@@ -69,8 +82,8 @@ export function createRetentionSchedulePage() {
     onSelect: (id) => selectArchive(id),
     onRetry: () => loadDestroyedArchives(destroyedPage),
   })
-  grid.append(table.element, detail.element)
-  root.append(heading, grid, destroyedTable.element)
+  grid.append(table.element, destroyedTable.element)
+  root.append(heading, grid, detailView)
 
   mutations = createArchiveMutationDialogs({
     onUpdated(record) {
@@ -79,9 +92,8 @@ export function createRetentionSchedulePage() {
     },
     async onDeleted(id) {
       table.removeRecord(id)
-      detail.render(null)
+      showRetentionList()
       await loadArchives(Math.min(currentPage, table.getPageCount()))
-      detail.focusHeading()
     },
   })
   workflows = createArchiveWorkflowDialogs({
@@ -91,10 +103,9 @@ export function createRetentionSchedulePage() {
     },
     async onDestroyed(record) {
       table.removeRecord(record.id)
-      detail.render(null)
+      showRetentionList()
       await loadArchives(Math.min(currentPage, table.getPageCount()))
       await loadDestroyedArchives(destroyedPage)
-      detail.focusHeading()
     },
   })
 
@@ -153,13 +164,19 @@ export function createRetentionSchedulePage() {
   }
 
   async function selectArchive(id) {
-    const request = ++detailRequest
-    detail.element.hidden = !id
-    grid.classList.toggle('has-selected-archive', Boolean(id))
     if (!id) {
-      detail.render(null)
+      if (detailView.hidden) {
+        detail.element.hidden = true
+        detail.render(null)
+      }
       return
     }
+
+    const request = ++detailRequest
+    grid.hidden = true
+    detailView.hidden = false
+    detail.element.hidden = false
+    detailHeading.focus()
 
     const cached = getReadCache('archive-detail', id)
     if (cached) detail.render(cached)
@@ -174,6 +191,16 @@ export function createRetentionSchedulePage() {
     }
   }
 
+  function showRetentionList() {
+    detailRequest += 1
+    detail.render(null)
+    detail.element.hidden = true
+    detailView.hidden = true
+    grid.hidden = false
+    tableHeading?.focus()
+  }
+
+  backButton.addEventListener('click', showRetentionList)
   const onUploadComplete = () => loadArchives(currentPage)
   window.addEventListener('archive-upload-complete', onUploadComplete)
   loadArchives()
@@ -187,6 +214,7 @@ export function createRetentionSchedulePage() {
       destroyedRequest += 1
       detailRequest += 1
       window.removeEventListener('archive-upload-complete', onUploadComplete)
+      backButton.removeEventListener('click', showRetentionList)
       table.destroy()
       destroyedTable.destroy()
       mutations.destroy()

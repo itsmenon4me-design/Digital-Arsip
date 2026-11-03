@@ -1,4 +1,5 @@
 import { renderTableSkeleton } from './tableSkeleton.js'
+import { ARCHIVE_CONTENT_TYPES } from '../services/arsipService.js'
 
 const statusLabels = {
   terverifikasi: 'Terverifikasi',
@@ -68,6 +69,7 @@ export function createArsipTable({
   showSearch = false,
   showClassification = false,
   showPagination = false,
+  selectable = true,
   dateField = 'created_at',
   dateHeading = 'Diunggah',
   emptyTitle = 'Belum ada arsip',
@@ -101,8 +103,23 @@ export function createArsipTable({
   const classificationFilter = makeFilter('Klasifikasi', 'classificationId', [
     { label: 'Semua klasifikasi', value: '' },
   ])
+  const contentTypeFilter = makeFilter('Jenis konten', 'contentType', [
+    { label: 'Semua jenis konten', value: '' },
+    ...ARCHIVE_CONTENT_TYPES.map((value) => ({ label: value, value })),
+  ])
+  const channelFilter = makeInputFilter('Kanal publikasi', 'channel', 'search', 'Kanal atau media')
   const fromDateFilter = makeInputFilter('Tanggal unggah mulai', 'fromDate', 'date')
   const toDateFilter = makeInputFilter('Tanggal unggah sampai', 'toDate', 'date')
+  const publicationFromDateFilter = makeInputFilter(
+    'Tanggal publikasi mulai',
+    'publicationFromDate',
+    'date',
+  )
+  const publicationToDateFilter = makeInputFilter(
+    'Tanggal publikasi sampai',
+    'publicationToDate',
+    'date',
+  )
   const unitFilter = makeInputFilter('Unit pencipta', 'unit', 'text', 'Nama unit')
   const advancedFilters = document.createElement('div')
   advancedFilters.className = 'archive-additional-filters'
@@ -120,8 +137,12 @@ export function createArsipTable({
   advancedFields.className = 'archive-additional-filter-fields'
   advancedFields.append(
     classificationFilter.wrapper,
+    contentTypeFilter.wrapper,
+    channelFilter.wrapper,
     fromDateFilter.wrapper,
     toDateFilter.wrapper,
+    publicationFromDateFilter.wrapper,
+    publicationToDateFilter.wrapper,
     unitFilter.wrapper,
   )
   const advancedActions = document.createElement('div')
@@ -145,8 +166,8 @@ export function createArsipTable({
     searchInput = document.createElement('input')
     searchInput.type = 'search'
     searchInput.className = 'archive-list-search'
-    searchInput.placeholder = 'Cari nomor arsip atau judul'
-    searchInput.setAttribute('aria-label', 'Cari nomor arsip atau judul')
+    searchInput.placeholder = 'Cari nomor, judul, kegiatan, kanal, penulis, atau kata kunci'
+    searchInput.setAttribute('aria-label', 'Cari arsip berdasarkan metadata publikasi')
     filters.prepend(searchInput)
   }
   header.append(titleGroup, filters)
@@ -179,6 +200,7 @@ export function createArsipTable({
   thead.append(headerRow)
   const tbody = document.createElement('tbody')
   tbody.addEventListener('click', (event) => {
+    if (!selectable || !onSelect) return
     const row = event.target.closest('tr[data-id]')
     if (!row || !tbody.contains(row)) return
 
@@ -221,8 +243,12 @@ export function createArsipTable({
       status: showFilters ? statusFilter.select.value : '',
       search: searchInput?.value.trim() ?? '',
       classificationId: showAdvancedFilters ? classificationFilter.select.value : '',
+      contentType: showAdvancedFilters ? contentTypeFilter.select.value : '',
+      channel: showAdvancedFilters ? channelFilter.input.value.trim() : '',
       fromDate: showAdvancedFilters ? fromDateFilter.input.value : '',
       toDate: showAdvancedFilters ? toDateFilter.input.value : '',
+      publicationFromDate: showAdvancedFilters ? publicationFromDateFilter.input.value : '',
+      publicationToDate: showAdvancedFilters ? publicationToDateFilter.input.value : '',
       unit: showAdvancedFilters ? unitFilter.input.value.trim() : '',
     }
   }
@@ -315,8 +341,12 @@ export function createArsipTable({
     categoryFilter.select.disabled = true
     statusFilter.select.disabled = true
     classificationFilter.select.disabled = true
+    contentTypeFilter.select.disabled = true
+    channelFilter.input.disabled = true
     fromDateFilter.input.disabled = true
     toDateFilter.input.disabled = true
+    publicationFromDateFilter.input.disabled = true
+    publicationToDateFilter.input.disabled = true
     unitFilter.input.disabled = true
     applyAdvancedFilters.disabled = true
     resetFilters.disabled = true
@@ -324,7 +354,7 @@ export function createArsipTable({
     previousButton.disabled = true
     nextButton.disabled = true
     pagination.hidden = true
-    onSelect(null)
+    if (selectable) onSelect?.(null)
     state.replaceChildren()
     if (tbody.childElementCount === 0) {
       renderTableSkeleton(tbody, headerRow.childElementCount, 5)
@@ -345,8 +375,12 @@ export function createArsipTable({
     categoryFilter.select.disabled = false
     statusFilter.select.disabled = false
     classificationFilter.select.disabled = false
+    contentTypeFilter.select.disabled = false
+    channelFilter.input.disabled = false
     fromDateFilter.input.disabled = false
     toDateFilter.input.disabled = false
+    publicationFromDateFilter.input.disabled = false
+    publicationToDateFilter.input.disabled = false
     unitFilter.input.disabled = false
     applyAdvancedFilters.disabled = false
     resetFilters.disabled = false
@@ -369,8 +403,12 @@ export function createArsipTable({
     categoryFilter.select.disabled = false
     statusFilter.select.disabled = false
     classificationFilter.select.disabled = false
+    contentTypeFilter.select.disabled = false
+    channelFilter.input.disabled = false
     fromDateFilter.input.disabled = false
     toDateFilter.input.disabled = false
+    publicationFromDateFilter.input.disabled = false
+    publicationToDateFilter.input.disabled = false
     unitFilter.input.disabled = false
     applyAdvancedFilters.disabled = false
     resetFilters.disabled = false
@@ -383,7 +421,7 @@ export function createArsipTable({
     currentPage = page
     totalRecords = total
     updatePagination()
-    onSelect(null)
+    if (selectable) onSelect?.(null)
 
     if (!records.length) {
       const empty = document.createElement('div')
@@ -412,12 +450,16 @@ export function createArsipTable({
       const numberCell = document.createElement('td')
       numberCell.className = 'archive-number'
       numberCell.dataset.column = 'number'
-      const selectButton = document.createElement('button')
-      selectButton.type = 'button'
-      selectButton.className = 'table-select'
-      selectButton.textContent = record.nomor_arsip
-      selectButton.setAttribute('aria-label', `Pilih arsip ${record.nomor_arsip}`)
-      selectButton.setAttribute('aria-pressed', 'false')
+      const number = selectable
+        ? document.createElement('button')
+        : document.createElement('span')
+      if (selectable) {
+        number.type = 'button'
+        number.className = 'table-select'
+        number.setAttribute('aria-label', `Pilih arsip ${record.nomor_arsip}`)
+        number.setAttribute('aria-pressed', 'false')
+      }
+      number.textContent = record.nomor_arsip
 
       const titleCell = document.createElement('td')
       titleCell.dataset.column = 'title'
@@ -425,7 +467,7 @@ export function createArsipTable({
       const categoryCell = document.createElement('td')
       categoryCell.dataset.column = 'category'
       categoryCell.textContent = record.kategori ?? ''
-      numberCell.append(selectButton)
+      numberCell.append(number)
       row.append(numberCell, titleCell, categoryCell)
       if (showClassification) {
         const classificationCell = document.createElement('td')
@@ -469,8 +511,12 @@ export function createArsipTable({
     categoryFilter.select.value = ''
     statusFilter.select.value = ''
     classificationFilter.select.value = ''
+    contentTypeFilter.select.value = ''
+    channelFilter.input.value = ''
     fromDateFilter.input.value = ''
     toDateFilter.input.value = ''
+    publicationFromDateFilter.input.value = ''
+    publicationToDateFilter.input.value = ''
     unitFilter.input.value = ''
     if (searchInput) searchInput.value = ''
     setAdvancedFiltersVisible(false)
@@ -533,8 +579,12 @@ export function createArsipTable({
       }
       if (showAdvancedFilters) {
         classificationFilter.select.value = filters.classificationId ?? ''
+        contentTypeFilter.select.value = filters.contentType ?? ''
+        channelFilter.input.value = filters.channel ?? ''
         fromDateFilter.input.value = filters.fromDate ?? ''
         toDateFilter.input.value = filters.toDate ?? ''
+        publicationFromDateFilter.input.value = filters.publicationFromDate ?? ''
+        publicationToDateFilter.input.value = filters.publicationToDate ?? ''
         unitFilter.input.value = filters.unit ?? ''
       }
       if (searchInput) searchInput.value = filters.search ?? ''

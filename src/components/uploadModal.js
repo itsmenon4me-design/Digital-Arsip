@@ -1,4 +1,8 @@
-import { fetchClassifications, uploadArchive } from '../services/arsipService.js'
+import {
+  ARCHIVE_CONTENT_TYPES,
+  fetchClassifications,
+  uploadArchive,
+} from '../services/arsipService.js'
 import { getReadCache } from '../services/readCache.js'
 import { showToast } from './toast.js'
 
@@ -51,7 +55,7 @@ export function createUploadModal({ onComplete = async () => {} } = {}) {
   header.append(title, closeButton)
 
   const intro = document.createElement('p')
-  intro.textContent = 'Lengkapi identitas arsip dan pilih berkas PDF, gambar, video, Excel, Word, atau PowerPoint hingga 50 MB. Tanggal, kanal, dan nama kegiatan publikasi boleh dikosongkan sampai SOP ditetapkan.'
+  intro.textContent = 'Lengkapi identitas publikasi dan pilih berkas PDF, gambar, video, Excel, Word, atau PowerPoint hingga 50 MB.'
 
   const numberInput = appendField(form, 'Nomor arsip', 'nomorArsip')
   numberInput.maxLength = 120
@@ -60,11 +64,31 @@ export function createUploadModal({ onComplete = async () => {} } = {}) {
   const categoryInput = appendField(form, 'Kategori', 'kategori')
   categoryInput.maxLength = 120
 
-  const publicationDateInput = appendField(form, 'Tanggal publikasi (opsional)', 'tanggalPublikasi', 'date')
-  publicationDateInput.required = false
-  const publicationChannelInput = appendField(form, 'Kanal publikasi (opsional)', 'kanalPublikasi')
-  publicationChannelInput.required = false
+  const contentTypeField = document.createElement('label')
+  contentTypeField.className = 'upload-field'
+  const contentTypeLabel = document.createElement('span')
+  contentTypeLabel.textContent = 'Jenis konten'
+  const contentTypeInput = document.createElement('select')
+  contentTypeInput.name = 'jenisKonten'
+  contentTypeInput.required = true
+  contentTypeInput.append(makeOption('', 'Pilih jenis konten'))
+  ARCHIVE_CONTENT_TYPES.forEach((value) => {
+    contentTypeInput.append(makeOption(value, value))
+  })
+  contentTypeField.append(contentTypeLabel, contentTypeInput)
+  form.append(contentTypeField)
+
+  const publicationDateInput = appendField(form, 'Tanggal publikasi', 'tanggalPublikasi', 'date')
+  const publicationChannelInput = appendField(form, 'Kanal publikasi', 'kanalPublikasi')
   publicationChannelInput.maxLength = 120
+  const authorInput = appendField(form, 'Penulis atau pembuat konten (opsional)', 'penulis')
+  authorInput.required = false
+  authorInput.maxLength = 255
+  const publicationUrlInput = appendField(form, 'Tautan publikasi asli (opsional)', 'tautanPublikasi', 'url')
+  publicationUrlInput.required = false
+  publicationUrlInput.maxLength = 2048
+  const keywordsInput = appendField(form, 'Kata kunci (pisahkan dengan koma, opsional)', 'kataKunci')
+  keywordsInput.required = false
   const eventNameInput = appendField(form, 'Nama kegiatan (opsional)', 'namaKegiatan')
   eventNameInput.required = false
   eventNameInput.maxLength = 255
@@ -257,11 +281,15 @@ export function createUploadModal({ onComplete = async () => {} } = {}) {
       nomorArsip: numberInput.value,
       judul: titleInput.value,
       kategori: categoryInput.value,
+      jenisKonten: contentTypeInput.value,
       klasifikasiId: classificationSelect.value,
       masaRetensiTahun: retentionYears,
       tanggalRetensi: retentionDate.toISOString().slice(0, 10),
       tanggalPublikasi: publicationDateInput.value || null,
       kanalPublikasi: publicationChannelInput.value.trim(),
+      penulis: authorInput.value.trim(),
+      tautanPublikasi: publicationUrlInput.value.trim(),
+      kataKunci: keywordsInput.value,
       namaKegiatan: eventNameInput.value.trim(),
       tingkatAkses: accessSelect.value,
     }

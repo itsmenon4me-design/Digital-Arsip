@@ -7,7 +7,7 @@ export function createLoginPage({ onSubmit, configMessage = '', initialMessage =
   card.className = 'login-card'
   const brand = document.createElement('p')
   brand.className = 'login-brand'
-  brand.textContent = 'Humas Polres Metro Kota Bekasi'
+  brand.textContent = 'Humas Polres Metro Bekasi Kota'
   const title = document.createElement('h1')
   title.id = 'login-title'
   title.textContent = 'Masuk ke Dasbor Arsip'

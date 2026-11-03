@@ -9,10 +9,9 @@ import { createDetailPanel } from '../components/detailPanel.js'
 import { createArchiveMutationDialogs } from '../components/archiveMutationDialogs.js'
 import { createArchiveWorkflowDialogs } from '../components/archiveWorkflowDialogs.js'
 import { getReadCache } from '../services/readCache.js'
-import { canManageArchives } from '../services/accessControl.js'
 
 export function createArchiveListPage({ role = null } = {}) {
-  const canManage = canManageArchives(role)
+  const canEdit = role === 'admin'
   const canDelete = role === 'admin'
   const canVerify = role === 'admin'
   const root = document.createElement('div')
@@ -27,7 +26,7 @@ export function createArchiveListPage({ role = null } = {}) {
   const title = document.createElement('h2')
   title.textContent = 'Daftar Arsip'
   const description = document.createElement('p')
-  description.textContent = 'Cari arsip berdasarkan nomor, judul, kategori, status, klasifikasi, tanggal unggah, atau unit pencipta.'
+  description.textContent = 'Cari arsip berdasarkan nomor, judul, kegiatan, kanal publikasi, penulis, atau kata kunci. Gunakan filter jenis konten dan tanggal unggah atau publikasi.'
   headingCopy.append(eyebrow, title, description)
   heading.append(headingCopy)
 
@@ -42,8 +41,9 @@ export function createArchiveListPage({ role = null } = {}) {
   let classificationsGeneration = 0
   let currentFilters = { page: 1 }
   let mutations
+  let grid
   const detail = createDetailPanel({
-    onEdit: canManage ? (archive) => mutations?.openEdit(archive) : null,
+    onEdit: canEdit ? (archive) => mutations?.openEdit(archive) : null,
     onDelete: canDelete ? (archive) => mutations?.openDelete(archive) : null,
     onVerify: canVerify ? (archive) => workflows?.openReview(archive) : null,
   })
@@ -60,8 +60,9 @@ export function createArchiveListPage({ role = null } = {}) {
     onSelect: (id) => selectArchive(id),
     onRetry: () => loadArchives(),
   })
-  const grid = document.createElement('div')
+  grid = document.createElement('div')
   grid.className = 'archive-list-grid'
+  detail.element.hidden = true
   grid.append(table.element, detail.element)
   root.append(heading, grid)
 
@@ -161,8 +162,12 @@ export function createArchiveListPage({ role = null } = {}) {
       status: pageOptions.status ?? '',
       search: pageOptions.search ?? '',
       classificationId: pageOptions.classificationId ?? '',
+      contentType: pageOptions.contentType ?? '',
+      channel: pageOptions.channel ?? '',
       fromDate: pageOptions.fromDate ?? '',
       toDate: pageOptions.toDate ?? '',
+      publicationFromDate: pageOptions.publicationFromDate ?? '',
+      publicationToDate: pageOptions.publicationToDate ?? '',
       unit: pageOptions.unit ?? '',
     }
     const cachedResult = getReadCache('archive-page', cacheParams)
@@ -177,8 +182,13 @@ export function createArchiveListPage({ role = null } = {}) {
     } else {
       table.showLoading()
     }
-    if (currentFilters.fromDate && currentFilters.toDate
-      && currentFilters.fromDate > currentFilters.toDate) {
+    const invalidUploadDateRange = currentFilters.fromDate
+      && currentFilters.toDate
+      && currentFilters.fromDate > currentFilters.toDate
+    const invalidPublicationDateRange = currentFilters.publicationFromDate
+      && currentFilters.publicationToDate
+      && currentFilters.publicationFromDate > currentFilters.publicationToDate
+    if (invalidUploadDateRange || invalidPublicationDateRange) {
       table.showError('Rentang tanggal tidak valid. Tanggal mulai harus sama dengan atau sebelum tanggal akhir.')
       return
     }
@@ -216,6 +226,8 @@ export function createArchiveListPage({ role = null } = {}) {
 
   async function selectArchive(id) {
     const request = ++detailVersion
+    detail.element.hidden = !id
+    grid?.classList.toggle('has-selected-archive', Boolean(id))
     if (!id) {
       detail.render(null)
       return

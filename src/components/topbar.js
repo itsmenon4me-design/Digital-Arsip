@@ -81,8 +81,8 @@ export function createTopbar({ onLogout = signOut } = {}) {
   const searchInput = document.createElement('input')
   searchInput.type = 'search'
   searchInput.name = 'q'
-  searchInput.setAttribute('aria-label', 'Cari nomor arsip atau judul')
-  searchInput.placeholder = 'Cari nomor arsip atau judul...'
+  searchInput.setAttribute('aria-label', 'Cari arsip berdasarkan metadata publikasi')
+  searchInput.placeholder = 'Cari nomor, judul, kegiatan, kanal, penulis, atau kata kunci'
 
   let searchTimer = null
   searchInput.addEventListener('input', () => {

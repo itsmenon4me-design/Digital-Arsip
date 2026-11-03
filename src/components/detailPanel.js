@@ -47,6 +47,23 @@ function isOcrSupported(archive) {
   return /\.(pdf|jpe?g|png)$/i.test(fileName)
 }
 
+function archiveMimeType(archive) {
+  if (archive?.tipe_file) return archive.tipe_file.toLowerCase().split(';', 1)[0].trim()
+  const extension = (archive?.nama_berkas || archive?.file_path || '')
+    .split('.')
+    .pop()
+    ?.toLowerCase()
+  return {
+    pdf: 'application/pdf',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    tif: 'image/tiff',
+    tiff: 'image/tiff',
+    png: 'image/png',
+    mp4: 'video/mp4',
+  }[extension] ?? ''
+}
+
 export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}) {
   const section = document.createElement('section')
   section.className = 'panel detail-panel'
@@ -63,16 +80,26 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
   const preview = document.createElement('div')
   preview.className = 'document-preview'
   preview.setAttribute('aria-label', 'Area pratinjau dokumen')
-  const page = document.createElement('div')
-  page.className = 'preview-page'
-  const previewLabel = document.createElement('span')
-  previewLabel.className = 'preview-label'
-  previewLabel.textContent = 'PRATINJAU'
-  const previewName = document.createElement('strong')
-  const previewNumber = document.createElement('span')
-  previewNumber.className = 'preview-number'
-  page.append(previewLabel, previewName, previewNumber)
-  preview.append(page)
+  const previewDialog = document.createElement('dialog')
+  previewDialog.className = 'ocr-dialog archive-preview-dialog'
+  previewDialog.setAttribute('aria-labelledby', 'archive-preview-title')
+  const previewHeader = document.createElement('div')
+  previewHeader.className = 'dialog-header'
+  const previewTitle = document.createElement('h2')
+  previewTitle.id = 'archive-preview-title'
+  previewTitle.textContent = 'Pratinjau berkas'
+  const previewCloseButton = document.createElement('button')
+  previewCloseButton.type = 'button'
+  previewCloseButton.className = 'button button-outline'
+  previewCloseButton.textContent = 'Tutup'
+  previewHeader.append(previewTitle, previewCloseButton)
+  const previewStatus = document.createElement('p')
+  previewStatus.className = 'panel-note preview-dialog-status'
+  previewStatus.setAttribute('role', 'status')
+  previewStatus.setAttribute('aria-live', 'polite')
+  const previewContent = document.createElement('div')
+  previewContent.className = 'preview-dialog-content'
+  previewDialog.append(previewHeader, previewStatus, previewContent)
 
   const metadata = document.createElement('dl')
   metadata.className = 'detail-list'
@@ -184,6 +211,7 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
     workflowActions,
     ocrActions,
     message,
+    previewDialog,
     ocrDialog,
   )
 
@@ -191,6 +219,116 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
   let busy = false
   let loading = false
   let ocrController = null
+  let previewRequest = 0
+  let previewOpener = null
+
+  function isPreviewSupported(archive) {
+    const mimeType = archiveMimeType(archive)
+    return mimeType.startsWith('image/')
+      || mimeType === 'video/mp4'
+      || mimeType === 'application/pdf'
+  }
+
+  function showPreviewCard(archive) {
+    const page = document.createElement('div')
+    page.className = 'preview-page'
+    const label = document.createElement('span')
+    label.className = 'preview-label'
+    label.textContent = archive?.file_path ? 'BERKAS ARSIP' : 'PRATINJAU'
+    const name = document.createElement('strong')
+    name.textContent = archive?.nama_berkas ?? archive?.judul ?? 'Belum ada dokumen dipilih'
+    const number = document.createElement('span')
+    number.className = 'preview-number'
+    number.textContent = archive?.nomor_arsip ?? 'Pilih arsip dari daftar'
+    page.append(label, name, number)
+    if (archive?.file_path && archive.file_status === 'tersedia' && isPreviewSupported(archive)) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'button button-outline preview-open-button'
+      button.textContent = 'Lihat pratinjau'
+      button.setAttribute('aria-label', `Lihat pratinjau berkas ${archive.nama_berkas || archive.judul}`)
+      button.addEventListener('click', openPreview)
+      page.append(button)
+    } else if (archive?.file_path) {
+      const formatNote = document.createElement('span')
+      formatNote.className = 'preview-status'
+      formatNote.textContent = 'Gunakan Buka atau Unduh untuk format berkas ini.'
+      page.append(formatNote)
+    }
+    preview.replaceChildren(page)
+  }
+
+  async function openPreview(event) {
+    const archive = selectedArchive
+    if (!archive?.file_path || archive.file_status !== 'tersedia' || !isPreviewSupported(archive)) return
+
+    const request = ++previewRequest
+    const mimeType = archiveMimeType(archive)
+    previewOpener = event.currentTarget
+    previewTitle.textContent = archive.nama_berkas || archive.judul || 'Pratinjau berkas'
+    previewStatus.setAttribute('role', 'status')
+    previewStatus.textContent = 'Menyiapkan tautan pratinjau...'
+    previewContent.replaceChildren()
+    previewDialog.showModal()
+    try {
+      const url = await createArchiveAccessUrl(archive, 'buka', 300)
+      if (
+        request !== previewRequest
+        || selectedArchive?.id !== archive.id
+        || !previewDialog.open
+      ) return
+      let media
+      if (mimeType.startsWith('image/')) {
+        media = document.createElement('img')
+        media.className = 'preview-dialog-media preview-dialog-image'
+        media.alt = `Pratinjau ${archive.nama_berkas || archive.judul}`
+        media.addEventListener('error', () => {
+          if (request === previewRequest) {
+            previewStatus.setAttribute('role', 'alert')
+            previewStatus.textContent = 'Berkas gambar tidak dapat ditampilkan. Gunakan Buka atau Unduh untuk memeriksa berkas.'
+          }
+        }, { once: true })
+      } else if (mimeType === 'video/mp4') {
+        media = document.createElement('video')
+        media.className = 'preview-dialog-media preview-dialog-video'
+        media.controls = true
+        media.playsInline = true
+        media.preload = 'metadata'
+        media.setAttribute('aria-label', `Pratinjau ${archive.nama_berkas || archive.judul}`)
+        media.addEventListener('error', () => {
+          if (request === previewRequest) {
+            previewStatus.setAttribute('role', 'alert')
+            previewStatus.textContent = 'Video tidak dapat diputar. Gunakan Buka atau Unduh untuk memeriksa berkas.'
+          }
+        }, { once: true })
+      } else {
+        media = document.createElement('embed')
+        media.className = 'preview-dialog-media preview-dialog-pdf'
+        media.type = 'application/pdf'
+        media.setAttribute('aria-label', `Pratinjau PDF ${archive.nama_berkas || archive.judul}`)
+      }
+      media.src = url
+      previewStatus.textContent = ''
+      previewContent.replaceChildren(media)
+    } catch (error) {
+      if (
+        request !== previewRequest
+        || selectedArchive?.id !== archive.id
+        || !previewDialog.open
+      ) return
+      previewStatus.setAttribute('role', 'alert')
+      previewStatus.textContent = `Pratinjau gagal dimuat: ${error.message}`
+    }
+  }
+
+  function resetPreview(archive) {
+    previewRequest += 1
+    previewOpener = null
+    if (previewDialog.open) previewDialog.close()
+    previewStatus.textContent = ''
+    previewContent.replaceChildren()
+    showPreviewCard(archive)
+  }
 
   function cancelOcr() {
     if (ocrController) ocrController.abort()
@@ -233,8 +371,6 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
     loading = false
     section.removeAttribute('aria-busy')
     selectedArchive = selected
-    previewName.textContent = selected?.judul ?? 'Belum ada dokumen dipilih'
-    previewNumber.textContent = selected?.nomor_arsip ?? 'Pilih arsip dari daftar'
     const classification = Array.isArray(selected?.klasifikasi)
       ? selected.klasifikasi[0]
       : selected?.klasifikasi
@@ -247,9 +383,19 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
           makeValueRow('Status', status ?? 'Tidak tersedia'),
           makeValueRow('Klasifikasi', classification?.nama ?? 'Belum dipilih'),
           makeValueRow('Unit pencipta', selected.unit_pencipta ?? 'Belum dipilih'),
+          makeValueRow('Jenis konten', selected.jenis_konten ?? 'Belum ditentukan'),
           makeValueRow('Tanggal publikasi', selected.tanggal_publikasi ?? 'Belum dicatat'),
           makeValueRow('Kanal publikasi', selected.kanal_publikasi ?? 'Belum dicatat'),
           makeValueRow('Kegiatan', selected.nama_kegiatan ?? 'Belum dicatat'),
+          makeValueRow('Penulis atau pembuat konten', selected.penulis ?? 'Belum dicatat'),
+          makeValueRow('Tautan publikasi asli', selected.tautan_publikasi ?? 'Belum dicatat'),
+          makeValueRow(
+            'Kata kunci',
+            Array.isArray(selected.kata_kunci) && selected.kata_kunci.length
+              ? selected.kata_kunci.join(', ')
+              : 'Belum dicatat',
+          ),
+          makeValueRow('Tipe berkas', selected.tipe_file ?? 'Belum dicatat'),
           makeValueRow(
             'Retensi',
             selected.masa_retensi_tahun == null
@@ -286,6 +432,7 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
         ]
       : []
     metadata.replaceChildren(...rows)
+    resetPreview(selected)
     message.textContent = selected?.file_status === 'penghapusan_tertunda'
       ? 'Pemusnahan sudah dimulai. Berkas terkunci dan proses perlu dilanjutkan dari halaman Jadwal Retensi.'
       : selected && !selected.file_path
@@ -301,6 +448,7 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
     cancelOcr()
     loading = true
     selectedArchive = null
+    resetPreview(null)
     section.setAttribute('aria-busy', 'true')
     metadata.replaceChildren(
       ...[
@@ -327,6 +475,7 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
     loading = false
     section.removeAttribute('aria-busy')
     selectedArchive = null
+    resetPreview(null)
     metadata.replaceChildren()
     message.textContent = 'Detail arsip gagal dimuat. Klik baris untuk mencoba lagi.'
     message.setAttribute('role', 'alert')
@@ -442,6 +591,14 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
       ocrStatus.textContent = `Teks tidak dapat disalin: ${error.message}`
       ocrStatus.setAttribute('role', 'alert')
     }
+  })
+
+  previewCloseButton.addEventListener('click', () => previewDialog.close())
+  previewDialog.addEventListener('close', () => {
+    previewRequest += 1
+    previewContent.replaceChildren()
+    if (previewOpener?.isConnected && !previewOpener.disabled) previewOpener.focus()
+    previewOpener = null
   })
 
   openButton.addEventListener('click', async () => {
