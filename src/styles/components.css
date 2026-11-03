@@ -959,20 +959,6 @@
   clip-path: inset(0 0 100% 0);
 }
 
-.classification-archive-preview img.is-revealing {
-  animation: classification-preview-image-unfold 650ms cubic-bezier(0.2, 0.75, 0.25, 1) both !important;
-}
-
-@keyframes classification-preview-image-unfold {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
 .classification-archive-preview video {
   pointer-events: none;
 }
@@ -2142,7 +2128,4 @@
     animation-iteration-count: 1 !important;
   }
 
-  .classification-archive-preview img.is-revealing {
-    animation: none !important;
-  }
 }

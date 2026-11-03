@@ -209,7 +209,7 @@ export function fetchClassifications({ includeInactive = false } = {}) {
   })
 }
 
-export async function fetchClassificationArchives({
+export function fetchClassificationArchives({
   classificationId,
   page = 1,
   pageSize = 12,
@@ -223,30 +223,30 @@ export async function fetchClassificationArchives({
   const to = from + safePageSize - 1
   const cacheParams = { classificationId, page: safePage, pageSize: safePageSize }
   const cached = getReadCache('classification-archives', cacheParams)
-  if (cached) return cached
+  if (cached) return Promise.resolve(cached)
 
-  let result
-  try {
-    result = await supabase
-      .from('arsip')
-      .select(ARCHIVE_SELECT, { count: 'exact' })
-      .eq('klasifikasi_id', classificationId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .range(from, to)
-  } catch (error) {
-    throw new Error(friendlyReadError(error, 'arsip klasifikasi'))
-  }
-  if (result.error) throw new Error(friendlyReadError(result.error, 'arsip klasifikasi'))
+  return loadReadRequest('classification-archives', cacheParams, async () => {
+    let result
+    try {
+      result = await supabase
+        .from('arsip')
+        .select(ARCHIVE_SELECT, { count: 'exact' })
+        .eq('klasifikasi_id', classificationId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+    } catch (error) {
+      throw new Error(friendlyReadError(error, 'arsip klasifikasi'))
+    }
+    if (result.error) throw new Error(friendlyReadError(result.error, 'arsip klasifikasi'))
 
-  const archives = {
-    records: result.data ?? [],
-    total: result.count ?? 0,
-    page: safePage,
-    pageSize: safePageSize,
-  }
-  setReadCache('classification-archives', cacheParams, archives)
-  return archives
+    return {
+      records: result.data ?? [],
+      total: result.count ?? 0,
+      page: safePage,
+      pageSize: safePageSize,
+    }
+  })
 }
 
 export function isClassificationManagementAvailable() {

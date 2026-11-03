@@ -446,6 +446,28 @@ export function createClassificationPage({ role = null } = {}) {
       tbody.append(row)
     })
     tableContainer.hidden = false
+    void warmClassificationArchivePages(records)
+  }
+
+  async function warmClassificationArchivePages(classifications) {
+    const pending = classifications.filter((record) => Number(record.jumlah_arsip) > 0)
+    let nextIndex = 0
+    const workers = Array.from({ length: Math.min(3, pending.length) }, async () => {
+      while (active && nextIndex < pending.length) {
+        const record = pending[nextIndex]
+        nextIndex += 1
+        try {
+          await fetchClassificationArchives({
+            classificationId: record.id,
+            page: 1,
+            pageSize: 12,
+          })
+        } catch (error) {
+          console.error(`Gagal menyiapkan arsip klasifikasi ${record.kode}:`, error)
+        }
+      }
+    })
+    await Promise.all(workers)
   }
 
   function openEditor(record = null) {
@@ -536,7 +558,6 @@ export function createClassificationPage({ role = null } = {}) {
       if (active && archivesDialog.open && request === archivesRequestVersion) {
         preview.querySelector('.classification-file-icon')?.remove()
         image.classList.remove('is-loading')
-        image.classList.add('is-revealing')
         cacheArchivePreview(archive.id, image)
       }
     }, { once: true })
@@ -554,7 +575,7 @@ export function createClassificationPage({ role = null } = {}) {
     }, { once: true })
     if (cached) {
       preview.querySelector('.classification-file-icon')?.remove()
-      image.classList.remove('is-loading', 'is-revealing')
+      image.classList.remove('is-loading')
     } else {
       image.classList.add('is-loading')
     }
@@ -668,37 +689,48 @@ export function createClassificationPage({ role = null } = {}) {
     void loadClassificationArchives(1)
   }
 
+  function renderClassificationArchives(result, request) {
+    archivesGrid.replaceChildren(...result.records.map((archive) => makeArchiveCard(archive, request)))
+    archivesState.hidden = true
+    archivesGrid.hidden = result.records.length === 0
+    const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize))
+    archivesPage = result.page
+    archivesPageSummary.textContent = result.total === 0
+      ? 'Belum ada arsip.'
+      : `Halaman ${result.page} dari ${pageCount} · ${new Intl.NumberFormat('id-ID').format(result.total)} arsip`
+    previousArchivesButton.disabled = result.page <= 1
+    nextArchivesButton.disabled = result.page >= pageCount
+    archivesPagination.hidden = result.total <= result.pageSize
+    if (result.records.length === 0) {
+      setArchiveState('Belum ada arsip yang terhubung ke klasifikasi ini. Arsip baru yang memilih klasifikasi ini akan tampil di sini.')
+    }
+  }
+
   async function loadClassificationArchives(page = 1) {
     if (!selectedClassification || !active) return
     const request = ++archivesRequestVersion
     const safePage = Math.max(1, page)
+    const params = {
+      classificationId: selectedClassification.id,
+      page: safePage,
+      pageSize: 12,
+    }
+    const cached = getReadCache('classification-archives', params)
     archivesPage = safePage
     archivesDialog.setAttribute('aria-busy', 'true')
+    if (cached) {
+      renderClassificationArchives(cached, request)
+      archivesDialog.removeAttribute('aria-busy')
+      return
+    }
     setArchiveState(`Memuat arsip untuk ${selectedClassification.kode}.`)
     archivesGrid.hidden = true
     archivesPagination.hidden = true
     try {
-      const result = await fetchClassificationArchives({
-        classificationId: selectedClassification.id,
-        page: safePage,
-        pageSize: 12,
-      })
+      const result = await fetchClassificationArchives(params)
       if (!active || request !== archivesRequestVersion) return
 
-      archivesGrid.replaceChildren(...result.records.map((archive) => makeArchiveCard(archive, request)))
-      archivesState.hidden = true
-      archivesGrid.hidden = result.records.length === 0
-      const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize))
-      archivesPage = result.page
-      archivesPageSummary.textContent = result.total === 0
-        ? 'Belum ada arsip.'
-        : `Halaman ${result.page} dari ${pageCount} · ${new Intl.NumberFormat('id-ID').format(result.total)} arsip`
-      previousArchivesButton.disabled = result.page <= 1
-      nextArchivesButton.disabled = result.page >= pageCount
-      archivesPagination.hidden = result.total <= result.pageSize
-      if (result.records.length === 0) {
-        setArchiveState('Belum ada arsip yang terhubung ke klasifikasi ini. Arsip baru yang memilih klasifikasi ini akan tampil di sini.')
-      }
+      renderClassificationArchives(result, request)
     } catch (error) {
       if (!active || request !== archivesRequestVersion) return
       console.error('Gagal memuat arsip berdasarkan klasifikasi:', error)
