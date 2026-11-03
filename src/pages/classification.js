@@ -10,6 +10,11 @@ import {
   setClassificationActive,
 } from '../services/arsipService.js'
 import { getReadCache } from '../services/readCache.js'
+import {
+  cacheArchivePreview,
+  getArchivePreviewUrl,
+  removeArchivePreview,
+} from '../services/archivePreviewCache.js'
 import { renderTableSkeleton } from '../components/tableSkeleton.js'
 import { showToast } from '../components/toast.js'
 
@@ -494,14 +499,6 @@ export function createClassificationPage({ role = null } = {}) {
     fileIcon.textContent = typeLabel
     preview.append(fileIcon)
 
-    if (archive.file_path && archive.file_status === 'tersedia'
-      && ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'mp4'].includes(extension)) {
-      const loading = document.createElement('span')
-      loading.className = 'classification-preview-status'
-      loading.textContent = 'Memuat pratinjau'
-      preview.append(loading)
-    }
-
     if (extension === 'mp4') {
       const playMarker = document.createElement('span')
       playMarker.className = 'classification-video-marker'
@@ -512,26 +509,56 @@ export function createClassificationPage({ role = null } = {}) {
     return { preview, extension }
   }
 
-  async function loadArchivePreview(archive, preview, extension, request) {
+  function showArchivePreviewError(preview, message) {
+    const unavailable = document.createElement('span')
+    unavailable.className = 'classification-preview-status'
+    unavailable.setAttribute('role', 'status')
+    unavailable.textContent = message
+    preview.append(unavailable)
+  }
+
+  function appendArchiveImage(archive, preview, url, request, cached = false) {
+    const image = document.createElement('img')
+    image.alt = ''
+    image.loading = 'lazy'
+    image.addEventListener('error', () => {
+      if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
+      image.remove()
+      if (cached) {
+        removeArchivePreview(archive.id)
+        void loadArchivePreview(archive, preview, fileExtension(archive), request, { skipCache: true })
+        return
+      }
+      showArchivePreviewError(preview, 'Pratinjau gambar tidak tersedia.')
+    }, { once: true })
+    image.src = url
+    preview.append(image)
+  }
+
+  async function loadArchivePreview(archive, preview, extension, request, { skipCache = false } = {}) {
+    const isImage = ['jpg', 'jpeg', 'png', 'tif', 'tiff'].includes(extension)
     try {
+      const cachedUrl = isImage && !skipCache ? getArchivePreviewUrl(archive.id) : null
       const url = await createArchiveAccessUrl(archive, 'buka', 300)
       if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
 
-      const loading = preview.querySelector('.classification-preview-status')
-      loading?.remove()
-      if (['jpg', 'jpeg', 'png', 'tif', 'tiff'].includes(extension)) {
-        const image = document.createElement('img')
-        image.alt = ''
-        image.loading = 'lazy'
-        image.src = url
-        image.addEventListener('error', () => {
-          image.remove()
-          const unavailable = document.createElement('span')
-          unavailable.className = 'classification-preview-status'
-          unavailable.textContent = 'Pratinjau gambar tidak didukung.'
-          preview.append(unavailable)
-        }, { once: true })
-        preview.append(image)
+      if (isImage) {
+        if (cachedUrl) {
+          appendArchiveImage(archive, preview, cachedUrl, request, true)
+          return
+        }
+
+        const response = await fetch(url)
+        if (!response.ok) throw new Error('Pratinjau gambar tidak dapat dimuat.')
+        const blob = await response.blob()
+        if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
+        const cachedUrl = cacheArchivePreview(archive.id, blob)
+        const imageUrl = cachedUrl ?? URL.createObjectURL(blob)
+        appendArchiveImage(archive, preview, imageUrl, request)
+        if (!cachedUrl) {
+          preview.querySelector('img')?.addEventListener('load', () => URL.revokeObjectURL(imageUrl), { once: true })
+          preview.querySelector('img')?.addEventListener('error', () => URL.revokeObjectURL(imageUrl), { once: true })
+        }
       } else if (extension === 'mp4') {
         const video = document.createElement('video')
         video.muted = true
@@ -539,19 +566,15 @@ export function createClassificationPage({ role = null } = {}) {
         video.preload = 'metadata'
         video.src = url
         video.setAttribute('aria-label', `Pratinjau video ${archive.nama_berkas || archive.judul}`)
+        video.addEventListener('error', () => {
+          showArchivePreviewError(preview, 'Pratinjau video tidak tersedia.')
+        }, { once: true })
         preview.append(video)
       }
     } catch (error) {
       if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
       console.error(`Pratinjau arsip ${archive.id} gagal dimuat:`, error)
-      const loading = preview.querySelector('.classification-preview-status')
-      if (loading) loading.textContent = 'Pratinjau tidak tersedia.'
-      else {
-        const unavailable = document.createElement('span')
-        unavailable.className = 'classification-preview-status'
-        unavailable.textContent = 'Pratinjau tidak tersedia.'
-        preview.append(unavailable)
-      }
+      showArchivePreviewError(preview, 'Pratinjau tidak tersedia.')
     }
   }
 
@@ -562,6 +585,8 @@ export function createClassificationPage({ role = null } = {}) {
       void openArchiveDetail(archive)
     })
     card.setAttribute('aria-label', `Buka detail arsip ${archive.judul}, berkas ${archive.nama_berkas || typeLabel}`)
+    const supportsPreview = archive.file_path && archive.file_status === 'tersedia'
+      && ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'mp4'].includes(extension)
     const { preview, extension: previewExtension } = makeArchivePreview(archive)
     const body = document.createElement('span')
     body.className = 'classification-archive-card-body'
@@ -589,8 +614,7 @@ export function createClassificationPage({ role = null } = {}) {
       body.append(title, fileName, metadata)
     }
     card.append(preview, body)
-    if (archive.file_path && archive.file_status === 'tersedia'
-      && ['jpg', 'jpeg', 'png', 'tif', 'tiff', 'mp4'].includes(previewExtension)) {
+    if (supportsPreview) {
       void loadArchivePreview(archive, preview, previewExtension, request)
     }
     return card
@@ -629,7 +653,7 @@ export function createClassificationPage({ role = null } = {}) {
       })
       if (!active || request !== archivesRequestVersion) return
 
-      archivesGrid.replaceChildren(...result.records.map((archive) => makeArchiveCard(archive, request)))
+      archivesGrid.replaceChildren(...result.records.map((archive, index) => makeArchiveCard(archive, request, index)))
       archivesState.hidden = true
       archivesGrid.hidden = result.records.length === 0
       const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize))

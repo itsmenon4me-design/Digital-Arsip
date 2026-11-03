@@ -455,12 +455,6 @@
   font-size: 12px;
 }
 
-.archive-filters :focus-visible,
-.audit-filter-form :focus-visible {
-  outline: none;
-  box-shadow: none;
-}
-
 .filter-control:has(:focus-visible) > span,
 .audit-filter-field:has(:focus-visible) > span {
   font-weight: 700;

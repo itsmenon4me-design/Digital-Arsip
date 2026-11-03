@@ -1,3 +1,5 @@
+import { clearArchivePreviewCache } from './archivePreviewCache.js'
+
 const readCache = new Map()
 const readRequests = new Map()
 let readGeneration = 0
@@ -49,5 +51,6 @@ export function loadReadRequest(namespace, params, loader) {
 export function clearReadCache() {
   readCache.clear()
   readRequests.clear()
+  clearArchivePreviewCache()
   readGeneration += 1
 }
