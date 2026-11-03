@@ -10,13 +10,10 @@ import {
   setClassificationActive,
 } from '../services/arsipService.js'
 import { getReadCache } from '../services/readCache.js'
-import {
-  cacheArchivePreview,
-  getArchivePreviewUrl,
-  removeArchivePreview,
-} from '../services/archivePreviewCache.js'
 import { renderTableSkeleton } from '../components/tableSkeleton.js'
 import { showToast } from '../components/toast.js'
+
+const MAX_CACHED_ARCHIVE_PREVIEWS = 24
 
 function makeButton(label, className, onClick) {
   const button = document.createElement('button')
@@ -309,6 +306,7 @@ export function createClassificationPage({ role = null } = {}) {
   let saving = false
   let requestVersion = 0
   let archivesRequestVersion = 0
+  const cachedArchivePreviews = new Map()
   let editingId = null
   let deletingRecord = null
   let deleting = false
@@ -517,48 +515,52 @@ export function createClassificationPage({ role = null } = {}) {
     preview.append(unavailable)
   }
 
-  function appendArchiveImage(archive, preview, url, request, cached = false) {
-    const image = document.createElement('img')
+  function cacheArchivePreview(archiveId, image) {
+    cachedArchivePreviews.delete(archiveId)
+    cachedArchivePreviews.set(archiveId, image)
+    while (cachedArchivePreviews.size > MAX_CACHED_ARCHIVE_PREVIEWS) {
+      const [oldestArchiveId, oldestImage] = cachedArchivePreviews.entries().next().value
+      cachedArchivePreviews.delete(oldestArchiveId)
+      if (!oldestImage.isConnected) oldestImage.removeAttribute('src')
+    }
+  }
+
+  function appendArchiveImage(archive, preview, imageOrUrl, request, cached = false) {
+    const image = typeof imageOrUrl === 'string'
+      ? document.createElement('img')
+      : imageOrUrl
     image.alt = ''
     image.loading = 'lazy'
+    image.dataset.previewRequest = String(request)
+    image.addEventListener('load', () => {
+      if (active && archivesDialog.open && request === archivesRequestVersion) {
+        cacheArchivePreview(archive.id, image)
+      }
+    }, { once: true })
     image.addEventListener('error', () => {
       if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
       image.remove()
       if (cached) {
-        removeArchivePreview(archive.id)
-        void loadArchivePreview(archive, preview, fileExtension(archive), request, { skipCache: true })
+        if (cachedArchivePreviews.get(archive.id) === image) {
+          cachedArchivePreviews.delete(archive.id)
+        }
+        void loadArchivePreview(archive, preview, fileExtension(archive), request)
         return
       }
       showArchivePreviewError(preview, 'Pratinjau gambar tidak tersedia.')
     }, { once: true })
-    image.src = url
+    if (typeof imageOrUrl === 'string') image.src = imageOrUrl
     preview.append(image)
   }
 
-  async function loadArchivePreview(archive, preview, extension, request, { skipCache = false } = {}) {
+  async function loadArchivePreview(archive, preview, extension, request) {
     const isImage = ['jpg', 'jpeg', 'png', 'tif', 'tiff'].includes(extension)
     try {
-      const cachedUrl = isImage && !skipCache ? getArchivePreviewUrl(archive.id) : null
       const url = await createArchiveAccessUrl(archive, 'buka', 300)
       if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
 
       if (isImage) {
-        if (cachedUrl) {
-          appendArchiveImage(archive, preview, cachedUrl, request, true)
-          return
-        }
-
-        const response = await fetch(url)
-        if (!response.ok) throw new Error('Pratinjau gambar tidak dapat dimuat.')
-        const blob = await response.blob()
-        if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
-        const cachedUrl = cacheArchivePreview(archive.id, blob)
-        const imageUrl = cachedUrl ?? URL.createObjectURL(blob)
-        appendArchiveImage(archive, preview, imageUrl, request)
-        if (!cachedUrl) {
-          preview.querySelector('img')?.addEventListener('load', () => URL.revokeObjectURL(imageUrl), { once: true })
-          preview.querySelector('img')?.addEventListener('error', () => URL.revokeObjectURL(imageUrl), { once: true })
-        }
+        appendArchiveImage(archive, preview, url, request)
       } else if (extension === 'mp4') {
         const video = document.createElement('video')
         video.muted = true
@@ -567,6 +569,7 @@ export function createClassificationPage({ role = null } = {}) {
         video.src = url
         video.setAttribute('aria-label', `Pratinjau video ${archive.nama_berkas || archive.judul}`)
         video.addEventListener('error', () => {
+          if (!active || !archivesDialog.open || request !== archivesRequestVersion) return
           showArchivePreviewError(preview, 'Pratinjau video tidak tersedia.')
         }, { once: true })
         preview.append(video)
@@ -615,7 +618,25 @@ export function createClassificationPage({ role = null } = {}) {
     }
     card.append(preview, body)
     if (supportsPreview) {
-      void loadArchivePreview(archive, preview, previewExtension, request)
+      const cachedImage = cachedArchivePreviews.get(archive.id)
+      if (cachedImage?.complete && cachedImage.naturalWidth > 0) {
+        cachedArchivePreviews.delete(archive.id)
+        cachedArchivePreviews.set(archive.id, cachedImage)
+        appendArchiveImage(archive, preview, cachedImage, request, true)
+        void createArchiveAccessUrl(archive, 'buka', 300).catch((error) => {
+          if (cachedArchivePreviews.get(archive.id) === cachedImage) {
+            cachedArchivePreviews.delete(archive.id)
+          }
+          console.error(`Pemeriksaan akses arsip ${archive.id} gagal:`, error)
+          if (!active || !archivesDialog.open || request !== archivesRequestVersion
+            || cachedImage.dataset.previewRequest !== String(request)) return
+          cachedImage.remove()
+          showArchivePreviewError(preview, 'Akses pratinjau gagal diperiksa.')
+          showToast(error.message || 'Akses arsip gagal diperbarui.')
+        })
+      } else {
+        void loadArchivePreview(archive, preview, previewExtension, request)
+      }
     }
     return card
   }
@@ -653,7 +674,7 @@ export function createClassificationPage({ role = null } = {}) {
       })
       if (!active || request !== archivesRequestVersion) return
 
-      archivesGrid.replaceChildren(...result.records.map((archive, index) => makeArchiveCard(archive, request, index)))
+      archivesGrid.replaceChildren(...result.records.map((archive) => makeArchiveCard(archive, request)))
       archivesState.hidden = true
       archivesGrid.hidden = result.records.length === 0
       const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize))
