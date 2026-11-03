@@ -534,6 +534,9 @@ export function createClassificationPage({ role = null } = {}) {
     image.dataset.previewRequest = String(request)
     image.addEventListener('load', () => {
       if (active && archivesDialog.open && request === archivesRequestVersion) {
+        preview.querySelector('.classification-file-icon')?.remove()
+        image.classList.remove('is-loading')
+        image.classList.add('is-revealing')
         cacheArchivePreview(archive.id, image)
       }
     }, { once: true })
@@ -549,8 +552,14 @@ export function createClassificationPage({ role = null } = {}) {
       }
       showArchivePreviewError(preview, 'Pratinjau gambar tidak tersedia.')
     }, { once: true })
-    if (typeof imageOrUrl === 'string') image.src = imageOrUrl
+    if (cached) {
+      preview.querySelector('.classification-file-icon')?.remove()
+      image.classList.remove('is-loading', 'is-revealing')
+    } else {
+      image.classList.add('is-loading')
+    }
     preview.append(image)
+    if (typeof imageOrUrl === 'string') image.src = imageOrUrl
   }
 
   async function loadArchivePreview(archive, preview, extension, request) {
@@ -653,11 +662,13 @@ export function createClassificationPage({ role = null } = {}) {
     archivesGrid.replaceChildren()
     archivesGrid.hidden = true
     archivesPagination.hidden = true
+    if (!archivesDialog.open) archivesDialog.showModal()
+    closeArchivesButton.focus()
     trigger?.setAttribute('aria-busy', 'true')
-    void loadClassificationArchives(1, { openAfterLoad: true, trigger })
+    void loadClassificationArchives(1)
   }
 
-  async function loadClassificationArchives(page = 1, { openAfterLoad = false, trigger = null } = {}) {
+  async function loadClassificationArchives(page = 1) {
     if (!selectedClassification || !active) return
     const request = ++archivesRequestVersion
     const safePage = Math.max(1, page)
@@ -688,20 +699,12 @@ export function createClassificationPage({ role = null } = {}) {
       if (result.records.length === 0) {
         setArchiveState('Belum ada arsip yang terhubung ke klasifikasi ini. Arsip baru yang memilih klasifikasi ini akan tampil di sini.')
       }
-      if (openAfterLoad && !archivesDialog.open) {
-        archivesDialog.showModal()
-        closeArchivesButton.focus()
-      }
     } catch (error) {
       if (!active || request !== archivesRequestVersion) return
       console.error('Gagal memuat arsip berdasarkan klasifikasi:', error)
       setArchiveState(error.message || 'Arsip gagal dimuat. Coba lagi.', 'alert', () => {
         void loadClassificationArchives(safePage)
       })
-      if (openAfterLoad && !archivesDialog.open) {
-        archivesDialog.showModal()
-        closeArchivesButton.focus()
-      }
     } finally {
       if (request === archivesRequestVersion) {
         archivesDialog.removeAttribute('aria-busy')
