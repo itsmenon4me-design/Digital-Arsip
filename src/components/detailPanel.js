@@ -381,7 +381,7 @@ export function createDetailPanel({ onEdit, onDelete, onVerify, onDestroy } = {}
       ? [
           makeValueRow('Kategori', selected.kategori ?? 'Tidak tersedia'),
           makeValueRow('Status', status ?? 'Tidak tersedia'),
-          makeValueRow('Klasifikasi', classification?.nama ?? 'Belum dipilih'),
+          makeValueRow('Klasifikasi', classification?.nama ?? 'Klasifikasi dihapus'),
           makeValueRow('Unit pencipta', selected.unit_pencipta ?? 'Belum dipilih'),
           makeValueRow('Jenis konten', selected.jenis_konten ?? 'Belum ditentukan'),
           makeValueRow('Tanggal publikasi', selected.tanggal_publikasi ?? 'Belum dicatat'),

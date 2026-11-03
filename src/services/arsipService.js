@@ -172,11 +172,17 @@ export function fetchClassifications({ includeInactive = false } = {}) {
         result = await supabase
           .from('klasifikasi')
           .select('id, kode, nama, keterangan, arsip(count)')
+          .is('arsip.deleted_at', null)
+          .neq('arsip.status', 'dimusnahkan')
+          .neq('arsip.file_status', 'dimusnahkan')
           .order('kode')
       } else {
         let query = supabase
           .from('klasifikasi')
           .select('id, kode, nama, keterangan, aktif, arsip(count)')
+          .is('arsip.deleted_at', null)
+          .neq('arsip.status', 'dimusnahkan')
+          .neq('arsip.file_status', 'dimusnahkan')
           .order('kode')
         if (!includeInactive) query = query.eq('aktif', true)
         result = await query
@@ -186,6 +192,9 @@ export function fetchClassifications({ includeInactive = false } = {}) {
           result = await supabase
             .from('klasifikasi')
             .select('id, kode, nama, keterangan, arsip(count)')
+            .is('arsip.deleted_at', null)
+            .neq('arsip.status', 'dimusnahkan')
+            .neq('arsip.file_status', 'dimusnahkan')
             .order('kode')
         } else if (!result.error) {
           classificationManagementAvailable = true
@@ -233,6 +242,8 @@ export function fetchClassificationArchives({
         .select(ARCHIVE_SELECT, { count: 'exact' })
         .eq('klasifikasi_id', classificationId)
         .is('deleted_at', null)
+        .neq('status', 'dimusnahkan')
+        .neq('file_status', 'dimusnahkan')
         .order('created_at', { ascending: false })
         .range(from, to)
     } catch (error) {

@@ -427,6 +427,7 @@ export function createClassificationPage({ role = null } = {}) {
       if (canManage) {
         const canDelete = record.dipakai === false
         const deleteButton = makeButton('Hapus', 'button button-danger', () => openDelete(record))
+        if (usageCheckPending) deleteButton.classList.add('is-checking-usage')
         deleteButton.disabled = !deletionAvailable || !canDelete || pendingIds.has(record.id)
         if (!deletionAvailable) {
           deleteButton.title = usageCheckPending
@@ -897,7 +898,7 @@ export function createClassificationPage({ role = null } = {}) {
       if (active) {
         if (updated) {
           records = records.map((item) => item.id === updated.id
-            ? { ...updated, dipakai: item.dipakai }
+            ? { ...item, ...updated, dipakai: item.dipakai }
             : item)
         }
         renderRecords(records)

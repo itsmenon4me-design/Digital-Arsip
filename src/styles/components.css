@@ -822,6 +822,13 @@
   font-size: 12px;
 }
 
+.classification-actions .button-danger.is-checking-usage:disabled {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-bg);
+  opacity: 1;
+}
+
 .classification-name-link {
   min-height: 44px;
   padding: 4px 0;

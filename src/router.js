@@ -140,6 +140,7 @@ export function createRouter({
     if (roleLoaded && role && requestedRoute !== route) {
       window.location.hash = route
     }
+    if (roleLoaded && role) prefetchRoute('/klasifikasi')
     const page = pages[route] ?? pages['/beranda']
     if (currentRoute !== route) {
       window.scrollTo(0, 0)

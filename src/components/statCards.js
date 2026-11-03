@@ -1,6 +1,6 @@
 const statItems = [
   { key: 'total', label: 'Total arsip', detail: 'Semua arsip yang dapat diakses' },
-  { key: 'waiting', label: 'Menunggu verifikasi', detail: 'Perlu ditinjau' },
+  { key: 'waiting', label: 'Perlu ditinjau', detail: 'Menunggu verifikasi atau perbaikan' },
   { key: 'retention', label: 'Mendekati masa retensi', detail: 'Dalam 90 hari' },
   { key: 'storage', label: 'Penyimpanan terpakai', detail: 'Berkas arsip' },
 ]

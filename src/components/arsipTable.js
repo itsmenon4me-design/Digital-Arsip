@@ -475,7 +475,7 @@ export function createArsipTable({
         const classification = Array.isArray(record.klasifikasi)
           ? record.klasifikasi[0]
           : record.klasifikasi
-        classificationCell.textContent = classification?.nama ?? 'Tidak tersedia'
+        classificationCell.textContent = classification?.nama ?? 'Klasifikasi dihapus'
         row.append(classificationCell)
       }
       const statusCell = document.createElement('td')
@@ -549,7 +549,7 @@ export function createArsipTable({
         ? record.klasifikasi[0]
         : record.klasifikasi
       const classificationCell = row.querySelector('[data-column="classification"]')
-      if (classificationCell) classificationCell.textContent = classification?.nama ?? 'Tidak tersedia'
+      if (classificationCell) classificationCell.textContent = classification?.nama ?? 'Klasifikasi dihapus'
       return true
     },
     removeRecord(id) {
